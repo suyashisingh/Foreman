@@ -22,7 +22,6 @@ from typing import Any
 from e2b import AsyncSandbox
 from google.genai import types as genai_types
 
-
 # ---------------------------------------------------------------------------
 # Tool definitions (FunctionDeclarations sent to Gemini)
 # ---------------------------------------------------------------------------
