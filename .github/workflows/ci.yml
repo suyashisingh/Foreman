@@ -34,11 +34,12 @@ jobs:
           --health-start-period 5s
 
     # Both alembic and pytest read these from the environment.
-    # JWT_SECRET_KEY and VOYAGE_API_KEY have no defaults — values must be present.
+    # JWT_SECRET_KEY, VOYAGE_API_KEY, and GEMINI_API_KEY have no defaults — values must be present.
     env:
       DATABASE_URL: postgresql+asyncpg://foreman:foreman_secret@localhost:5432/foreman_test
       JWT_SECRET_KEY: ci-only-dummy-secret-key-not-used-in-production-0000
       VOYAGE_API_KEY: ci-only-dummy-voyage-key-not-used-in-production-0000
+      GEMINI_API_KEY: ci-only-dummy-gemini-key-not-used-in-production-0000
 
     steps:
       - uses: actions/checkout@v4
