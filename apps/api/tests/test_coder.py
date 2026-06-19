@@ -11,7 +11,6 @@ Tests cover:
 
 from __future__ import annotations
 
-import uuid
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -22,8 +21,16 @@ from sqlalchemy import select
 from app.agents.coder import _build_coder_prompt, _parse_diff, coder_node
 from app.agents.state import AgentState
 from app.agents.tools import execute_tool
-from app.db.models import AgentRole, AgentStep, Diff, Repo, RepoStatus, Run, RunStatus, User
-
+from app.db.models import (
+    AgentRole,
+    AgentStep,
+    Diff,
+    Repo,
+    RepoStatus,
+    Run,
+    RunStatus,
+    User,
+)
 
 # ---------------------------------------------------------------------------
 # Mock builders
@@ -106,7 +113,7 @@ def _make_fn_call_response(name: str, args: dict[str, Any]) -> MagicMock:
 
 
 def _make_client_mock(*responses: MagicMock) -> MagicMock:
-    """Construct a mock genai.Client whose generate_content returns *responses* in order."""
+    """Build a mock genai.Client; ``generate_content`` iterates through *responses*."""
     client = MagicMock()
     client.aio.models.generate_content = AsyncMock(side_effect=list(responses))
     return client
@@ -190,7 +197,9 @@ def test_build_coder_prompt_includes_repo_dir() -> None:
 
 def test_build_coder_prompt_includes_plan_steps() -> None:
     plan = {
-        "steps": [{"file_path": "foo.py", "action": "modify", "description": "Add bar"}],
+        "steps": [
+            {"file_path": "foo.py", "action": "modify", "description": "Add bar"}
+        ],
         "rationale": "Because",
     }
     prompt = _build_coder_prompt("issue", plan, "/repo")
@@ -379,7 +388,7 @@ async def test_coder_executes_tool_calls(coder_run: Run, session_factory) -> Non
 
 @pytest.mark.asyncio
 async def test_coder_bounded_by_max_iterations(coder_run: Run, session_factory) -> None:
-    """When the model keeps calling tools, the loop stops after MAX_CODER_TOOL_ITERATIONS."""
+    """Tool-use loop exits after MAX_CODER_TOOL_ITERATIONS when model never stops."""
     sandbox = _make_sandbox_mock()
 
     # Model always returns a tool call — never stops on its own.
@@ -561,7 +570,8 @@ async def test_coder_sets_run_status_to_coding(
 async def test_coder_no_changes_produces_empty_diffs(
     coder_run: Run, session_factory, db
 ) -> None:
-    """When git diff returns nothing, diffs list is empty and no Diff rows are written."""
+    """When git diff returns nothing, diffs list is empty and no Diff rows are written.
+    """
     sandbox = _make_sandbox_mock()  # default: commands.run returns empty stdout
     client_mock = _make_client_mock(_make_text_response("Nothing to change."))
 
