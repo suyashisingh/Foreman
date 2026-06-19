@@ -411,9 +411,7 @@ async def test_coder_bounded_by_max_iterations(coder_run: Run, session_factory) 
 
 
 @pytest.mark.asyncio
-async def test_coder_persists_diffs_to_db(
-    coder_run: Run, session_factory, db
-) -> None:
+async def test_coder_persists_diffs_to_db(coder_run: Run, session_factory, db) -> None:
     """After coder_node succeeds, Diff rows exist in the DB with correct fields."""
     sandbox = _make_sandbox_mock()
 
@@ -463,9 +461,7 @@ async def test_coder_persists_diffs_to_db(
 
 
 @pytest.mark.asyncio
-async def test_coder_logs_agent_step(
-    coder_run: Run, session_factory, db
-) -> None:
+async def test_coder_logs_agent_step(coder_run: Run, session_factory, db) -> None:
     """After coder_node runs, an AgentStep row with agent=coder exists."""
     sandbox = _make_sandbox_mock()
     client_mock = _make_client_mock(_make_text_response("Done."))
@@ -570,8 +566,7 @@ async def test_coder_sets_run_status_to_coding(
 async def test_coder_no_changes_produces_empty_diffs(
     coder_run: Run, session_factory, db
 ) -> None:
-    """When git diff returns nothing, diffs list is empty and no Diff rows are written.
-    """
+    """Empty git diff produces empty diffs list and no Diff rows in the DB."""
     sandbox = _make_sandbox_mock()  # default: commands.run returns empty stdout
     client_mock = _make_client_mock(_make_text_response("Nothing to change."))
 
