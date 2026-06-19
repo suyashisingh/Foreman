@@ -14,6 +14,7 @@ os.environ.setdefault(
     "postgresql+asyncpg://foreman:foreman_secret@localhost:5434/foreman_test",
 )
 os.environ.setdefault("VOYAGE_API_KEY", "test-voyage-key-not-real")
+os.environ.setdefault("GEMINI_API_KEY", "test-gemini-key-not-real")
 
 import textwrap
 from pathlib import Path

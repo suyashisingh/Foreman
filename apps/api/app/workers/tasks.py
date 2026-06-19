@@ -9,10 +9,11 @@ access to the DB without going through the FastAPI request lifecycle.
 import asyncio
 import logging
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import Repo, RepoChunk, RepoStatus
+from app.db.models import Repo, RepoChunk, RepoStatus, Run, RunStatus
 from app.retrieval.chunking import chunk_repo
 from app.retrieval.cloning import CloneError, clone_repo, remove_clone
 from app.retrieval.embeddings import EmbeddingError, embed_texts
@@ -145,3 +146,96 @@ async def ingest_repo(ctx: dict, repo_id: str) -> None:
             "Repo ingestion complete",
             extra={"repo_id": repo_id, "chunk_count": len(chunks)},
         )
+
+
+# ---------------------------------------------------------------------------
+# Task: execute_run
+# ---------------------------------------------------------------------------
+
+
+async def _set_run_failed(db: AsyncSession, run: Run, error: str) -> None:
+    """Transition *run* to ``failed`` and record completion time."""
+    run.status = RunStatus.failed
+    run.completed_at = datetime.now(timezone.utc)
+    try:
+        await db.commit()
+    except Exception:
+        logger.error(
+            "Failed to mark run as failed",
+            extra={"run_id": str(run.id), "error": error},
+        )
+        await db.rollback()
+
+
+async def execute_run(ctx: dict, run_id: str) -> None:
+    """Invoke the Foreman agent graph for a given run.
+
+    Status transitions committed to the DB as execution progresses:
+
+        pending → planning → awaiting_approval
+                           ↘ failed (on any error)
+
+    The graph itself (build_graph) creates its own DB sessions per node.
+    This task only owns the status bookkeeping around the graph call.
+
+    Args:
+        ctx:    ARQ worker context.  Must contain ``"session_factory"``.
+        run_id: String representation of the ``Run.id`` UUID to execute.
+    """
+    from app.agents.state import AgentState
+    from app.orchestrator.graph import build_graph
+
+    session_factory: async_sessionmaker[AsyncSession] = ctx["session_factory"]
+    rid = uuid.UUID(run_id)
+
+    async with session_factory() as db:
+        run = await db.get(Run, rid)
+        if run is None:
+            logger.warning("execute_run: run not found", extra={"run_id": run_id})
+            return
+
+        run.status = RunStatus.planning
+        await db.commit()
+
+        repo_id: uuid.UUID = run.repo_id
+        issue_text: str = run.issue_text
+
+    try:
+        graph = build_graph()
+        initial_state: AgentState = {
+            "run_id": rid,
+            "repo_id": repo_id,
+            "issue_text": issue_text,
+            "retrieved_context": [],
+            "plan": None,
+            "current_agent": "",
+            "retry_count": 0,
+            "error": None,
+        }
+        final_state = await graph.ainvoke(initial_state)
+
+        async with session_factory() as db:
+            run = await db.get(Run, rid)
+            if run is not None:
+                run.status = RunStatus.awaiting_approval
+                run.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+
+        plan = final_state.get("plan") or {}
+        logger.info(
+            "execute_run complete",
+            extra={
+                "run_id": run_id,
+                "plan_steps": len(plan.get("steps", [])),
+            },
+        )
+
+    except Exception as exc:
+        logger.error(
+            "execute_run failed",
+            extra={"run_id": run_id, "error": str(exc)},
+        )
+        async with session_factory() as db:
+            run = await db.get(Run, rid)
+            if run is not None:
+                await _set_run_failed(db, run, str(exc))

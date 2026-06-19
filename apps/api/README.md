@@ -61,10 +61,16 @@ JWT_SECRET_KEY=<generate with: python -c "import secrets; print(secrets.token_he
 VOYAGE_API_KEY=<your Voyage AI key from dash.voyageai.com>
 VOYAGE_MODEL=voyage-code-3
 REPO_CLONE_DIR=/tmp/foreman-repos
+
+# Agent / LLM
+GEMINI_API_KEY=<your Google AI Studio key from aistudio.google.com>
+GEMINI_MODEL=gemini-2.0-flash
+LLM_PROVIDER=gemini
+MAX_CODER_RETRIES=2
 ```
 
-`JWT_SECRET_KEY` and `VOYAGE_API_KEY` have **no defaults** — the API will refuse
-to start if either is missing.
+`JWT_SECRET_KEY`, `VOYAGE_API_KEY`, and `GEMINI_API_KEY` have **no defaults** — the
+API will refuse to start if any is missing.
 
 ---
 
@@ -128,6 +134,54 @@ Tests mock both Postgres and Redis — no live services required to run the suit
 | `GET`  | `/api/v1/repos/{id}/search` | Search a ready repo by natural-language query. |
 
 All `/repos` endpoints require `Authorization: Bearer <token>`.
+
+### Runs
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/runs` | Start an agent run on a ready repo (returns **202 Accepted**). |
+| `GET`  | `/api/v1/runs` | List all runs owned by the caller. |
+| `GET`  | `/api/v1/runs/{id}` | Get run detail including all `agent_steps`. |
+
+All `/runs` endpoints require `Authorization: Bearer <token>`.
+
+#### Request body for `POST /api/v1/runs`
+
+```json
+{
+  "repo_id": "<uuid of a ready repo>",
+  "issue_text": "Add a subtract method to the Calculator class"
+}
+```
+
+Returns `422 Unprocessable Entity` if the repo is not yet `ready`, or `404` if it
+belongs to another user.
+
+#### Async agent flow
+
+`POST /api/v1/runs` returns **202 Accepted** immediately.  The agent graph runs in
+the ARQ worker through these status transitions:
+
+```
+pending → planning → awaiting_approval
+                   ↘ failed  (on any error)
+```
+
+Poll `GET /api/v1/runs/{id}` to observe progress.  Each node in the graph appends
+an `AgentStep` record containing token usage, latency, and structured I/O.
+
+#### LLM provider abstraction
+
+All agent nodes call `get_llm_client()` (in `app/agents/llm_client.py`) rather than
+importing any provider SDK directly.  The factory reads `LLM_PROVIDER` from settings
+and returns the matching `LLMClient` implementation.  Swapping to a different
+provider requires only a new subclass in that file — no node logic changes.
+
+Currently implemented: **Gemini** (`LLM_PROVIDER=gemini`) via the `google-genai` SDK.
+
+---
+
+### Repos
 
 #### Async ingestion flow
 

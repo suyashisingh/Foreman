@@ -37,6 +37,17 @@ class Settings(BaseSettings):
     # Where cloned repos are staged on disk before/during chunking.
     REPO_CLONE_DIR: str = "/tmp/foreman-repos"
 
+    # --- Agent / LLM ---
+    # No default: the app must not start without a configured LLM provider key.
+    GEMINI_API_KEY: str
+    # gemini-2.0-flash is the current stable, free-tier-eligible Flash model.
+    GEMINI_MODEL: str = "gemini-2.0-flash"
+    # Selects which LLMClient implementation get_llm_client() returns.
+    # Only "gemini" is implemented; add cases to llm_client.py to extend.
+    LLM_PROVIDER: str = "gemini"
+    # Maximum Coder→Tester retry iterations (used in Part 2 Coder node).
+    MAX_CODER_RETRIES: int = 2
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

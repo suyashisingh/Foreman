@@ -49,6 +49,7 @@ class RepoStatus(str, enum.Enum):
 class RunStatus(str, enum.Enum):
     """Lifecycle states for an agent run."""
 
+    pending = "pending"
     planning = "planning"
     coding = "coding"
     testing = "testing"

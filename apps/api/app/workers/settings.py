@@ -12,7 +12,7 @@ from arq.connections import RedisSettings
 from app.core.config import settings as app_settings
 from app.db import session as _db_session
 from app.db.session import close_engine, init_engine
-from app.workers.tasks import ingest_repo
+from app.workers.tasks import execute_run, ingest_repo
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class WorkerSettings:
 
     redis_settings: RedisSettings = RedisSettings.from_dsn(app_settings.REDIS_URL)
 
-    functions = [ingest_repo]
+    functions = [ingest_repo, execute_run]
 
     on_startup = on_startup
     on_shutdown = on_shutdown
