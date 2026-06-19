@@ -198,7 +198,7 @@ async def coder_node(state: AgentState) -> dict[str, Any]:
         for iteration in range(settings.MAX_CODER_TOOL_ITERATIONS):
             response = await client.aio.models.generate_content(
                 model=settings.GEMINI_MODEL,
-                contents=contents,
+                contents=contents,  # type: ignore[arg-type]
                 config=config,
             )
 
@@ -207,8 +207,13 @@ async def coder_node(state: AgentState) -> dict[str, Any]:
                 total_input_tokens += int(usage.prompt_token_count or 0)
                 total_output_tokens += int(usage.candidates_token_count or 0)
 
+            if not response.candidates:
+                break
             candidate_content = response.candidates[0].content
-            fn_call_parts = [p for p in candidate_content.parts if p.function_call]
+            if candidate_content is None:
+                break
+            parts = candidate_content.parts or []
+            fn_call_parts = [p for p in parts if p.function_call]
 
             if not fn_call_parts:
                 # No function calls → model has finished making edits.
@@ -224,14 +229,16 @@ async def coder_node(state: AgentState) -> dict[str, Any]:
 
             for part in fn_call_parts:
                 fc = part.function_call
-                result = await execute_tool(sandbox, fc.name, fc.args or {})
+                if fc is None:
+                    continue
+                result = await execute_tool(sandbox, fc.name or "", fc.args or {})
                 tool_calls_log.append(
                     {"name": fc.name, "args": fc.args, "result": result}
                 )
                 fn_response_parts.append(
                     genai_types.Part(
                         function_response=genai_types.FunctionResponse(
-                            name=fc.name,
+                            name=fc.name or "",
                             id=fc.id,
                             response=result,
                         )
