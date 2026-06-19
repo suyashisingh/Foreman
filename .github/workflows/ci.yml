@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Python: lint, format, type-check, migrate, test
+  # ---------------------------------------------------------------------------
+  api-checks:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: foreman
+          POSTGRES_PASSWORD: foreman_secret
+          POSTGRES_DB: foreman_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --health-start-period 5s
+
+    # Both alembic and pytest read these from the environment.
+    # JWT_SECRET_KEY has no default in Settings — a value must be present.
+    env:
+      DATABASE_URL: postgresql+asyncpg://foreman:foreman_secret@localhost:5432/foreman_test
+      JWT_SECRET_KEY: ci-only-dummy-secret-key-not-used-in-production-0000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: uv sync --frozen --all-groups
+
+      - name: Lint
+        working-directory: apps/api
+        run: uv run ruff check .
+
+      - name: Format check
+        working-directory: apps/api
+        run: uv run ruff format --check .
+
+      - name: Type check
+        working-directory: apps/api
+        run: uv run pyright app/
+
+      - name: Run migrations
+        working-directory: apps/api
+        run: uv run alembic upgrade head
+
+      - name: Test
+        working-directory: apps/api
+        run: uv run pytest tests/ -v
+
+  # ---------------------------------------------------------------------------
+  # Node: type-check, lint, build, test
+  # ---------------------------------------------------------------------------
+  web-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Type check
+        working-directory: apps/web
+        run: npm run type-check
+
+      - name: Lint
+        working-directory: apps/web
+        run: npm run lint
+
+      - name: Build
+        working-directory: apps/web
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+        run: npm run build
+
+      - name: Test
+        working-directory: apps/web
+        run: npm test -- --run

@@ -1,0 +1,36 @@
+# ── Secrets ──────────────────────────────────────────────────────────────────
+# All .env files at any depth; .env.example / .env.*.example are committed
+.env
+**/.env
+!**/.env.example
+!**/.env.*.example
+!**/.env.local.example
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+dist/
+*.egg-info/
+.eggs/
+
+# ── uv ───────────────────────────────────────────────────────────────────────
+.uv/
+
+# ── pytest / coverage ────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── IDE / tooling ────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+.claude/
+*.swp
+*.swo
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
