@@ -40,6 +40,7 @@ jobs:
       JWT_SECRET_KEY: ci-only-dummy-secret-key-not-used-in-production-0000
       VOYAGE_API_KEY: ci-only-dummy-voyage-key-not-used-in-production-0000
       GEMINI_API_KEY: ci-only-dummy-gemini-key-not-used-in-production-0000
+      E2B_API_KEY: ci-only-dummy-e2b-key-not-used-in-production-0000
 
     steps:
       - uses: actions/checkout@v4
