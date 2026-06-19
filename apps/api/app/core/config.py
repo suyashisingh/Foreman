@@ -48,8 +48,17 @@ class Settings(BaseSettings):
     # Selects which LLMClient implementation get_llm_client() returns.
     # Only "gemini" is implemented; add cases to llm_client.py to extend.
     LLM_PROVIDER: str = "gemini"
-    # Maximum Coder→Tester retry iterations (used in Part 2 Coder node).
+    # Maximum Coder→Tester retry iterations (Day 4 retry loop, not the tool loop).
     MAX_CODER_RETRIES: int = 2
+    # Maximum tool-call iterations within a single Coder invocation.  Bounds
+    # the inner tool-use loop so a confused model cannot loop forever inside
+    # one run (distinct from MAX_CODER_RETRIES, which governs Coder↔Tester
+    # retries across multiple invocations, coming on Day 4).
+    MAX_CODER_TOOL_ITERATIONS: int = 15
+
+    # --- Sandbox (e2b) ---
+    # No default: the app must not start without a configured sandbox key.
+    E2B_API_KEY: str
 
     model_config = SettingsConfigDict(
         env_file=".env",

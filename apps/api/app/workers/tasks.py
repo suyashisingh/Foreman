@@ -208,6 +208,7 @@ async def execute_run(ctx: dict, run_id: str) -> None:
             "issue_text": issue_text,
             "retrieved_context": [],
             "plan": None,
+            "diffs": [],
             "current_agent": "",
             "retry_count": 0,
             "error": None,
@@ -222,11 +223,13 @@ async def execute_run(ctx: dict, run_id: str) -> None:
                 await db.commit()
 
         plan = final_state.get("plan") or {}
+        diffs = final_state.get("diffs") or []
         logger.info(
             "execute_run complete",
             extra={
                 "run_id": run_id,
                 "plan_steps": len(plan.get("steps", [])),
+                "diff_count": len(diffs),
             },
         )
 

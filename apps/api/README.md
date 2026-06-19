@@ -67,6 +67,9 @@ GEMINI_API_KEY=<your Google AI Studio key from aistudio.google.com>
 GEMINI_MODEL=gemini-2.5-flash
 LLM_PROVIDER=gemini
 MAX_CODER_RETRIES=2
+MAX_CODER_TOOL_ITERATIONS=15
+# e2b sandbox — get a key at https://e2b.dev
+E2B_API_KEY=<your e2b key>
 ```
 
 `JWT_SECRET_KEY`, `VOYAGE_API_KEY`, and `GEMINI_API_KEY` have **no defaults** — the
@@ -178,6 +181,44 @@ and returns the matching `LLMClient` implementation.  Swapping to a different
 provider requires only a new subclass in that file — no node logic changes.
 
 Currently implemented: **Gemini** (`LLM_PROVIDER=gemini`) via the `google-genai` SDK.
+
+#### Agent graph: Planner → Coder → END
+
+```
+pending → planning → coding → awaiting_approval
+                            ↘ failed  (on any error)
+```
+
+**Planner** (step 0): retrieves the top-8 most relevant code chunks via pgvector
+cosine search and calls Gemini with `response_schema=Plan` to produce a structured
+implementation plan (list of `{file_path, action, description}` steps).
+
+**Coder** (step 1): opens a fresh [e2b](https://e2b.dev) sandbox, shallow-clones the
+target repo into it, then runs a **bounded tool-use loop**:
+
+1. Sends the Plan + issue text to Gemini with three tools available:
+   `read_file`, `write_file`, `list_files`.
+2. Executes each tool call against the real sandbox filesystem.
+3. Feeds results back as `FunctionResponse` content.
+4. Repeats until the model stops calling tools **or** `MAX_CODER_TOOL_ITERATIONS`
+   is reached (default 15) — graceful stop, never a hard crash.
+5. Runs `git diff` to capture a unified diff of all changes.
+6. Persists one `Diff` row per changed file (`approved=False`) and logs the
+   `AgentStep` with cumulative token usage across all loop turns.
+7. Always kills the sandbox in a `finally` block.
+
+After the Coder completes, the run transitions to `awaiting_approval` — a human
+(or future automated Reviewer node) can inspect the raw diffs.
+
+**Tester** and **Reviewer** nodes are planned for Day 4 and will slot in between
+Coder and END without requiring changes to existing nodes.
+
+New env vars introduced by the Coder:
+
+| Variable | Default | Description |
+|---|---|---|
+| `E2B_API_KEY` | *(required)* | e2b sandbox key — get one at e2b.dev |
+| `MAX_CODER_TOOL_ITERATIONS` | `15` | Max tool-call iterations per Coder run |
 
 ---
 

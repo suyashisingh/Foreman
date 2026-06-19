@@ -49,6 +49,10 @@ class AgentState(_AgentStateRequired, total=False):
 
     retrieved_context: list[dict[str, Any]]
     plan: dict[str, Any] | None
+    # Per-file diffs produced by the Coder node. Each entry has "file_path"
+    # and "patch" (unified diff section for that file).  Populated after the
+    # Coder's tool-use loop completes and `git diff` is captured.
+    diffs: list[dict[str, Any]]
     current_agent: str
     retry_count: int
     error: str | None

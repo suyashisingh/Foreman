@@ -15,6 +15,7 @@ os.environ.setdefault(
 )
 os.environ.setdefault("VOYAGE_API_KEY", "test-voyage-key-not-real")
 os.environ.setdefault("GEMINI_API_KEY", "test-gemini-key-not-real")
+os.environ.setdefault("E2B_API_KEY", "test-e2b-key-not-real")
 
 import textwrap
 from pathlib import Path

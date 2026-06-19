@@ -20,6 +20,7 @@ dependencies = [
     "arq>=0.25",
     "google-genai>=1.0",
     "langgraph>=0.3",
+    "e2b-code-interpreter>=1.0",
 ]
 
 [project.optional-dependencies]
