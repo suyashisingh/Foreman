@@ -40,8 +40,11 @@ class Settings(BaseSettings):
     # --- Agent / LLM ---
     # No default: the app must not start without a configured LLM provider key.
     GEMINI_API_KEY: str
-    # gemini-2.0-flash is the current stable, free-tier-eligible Flash model.
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    # gemini-2.5-flash confirmed working via live E2E testing. gemini-2.0-flash
+    # was the original default but its free-tier quota was exhausted/zeroed on
+    # the dev account, causing 429s during testing — switching to 2.5-flash
+    # resolved it. Change this if your account has quota on 2.0-flash.
+    GEMINI_MODEL: str = "gemini-2.5-flash"
     # Selects which LLMClient implementation get_llm_client() returns.
     # Only "gemini" is implemented; add cases to llm_client.py to extend.
     LLM_PROVIDER: str = "gemini"

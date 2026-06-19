@@ -64,7 +64,7 @@ REPO_CLONE_DIR=/tmp/foreman-repos
 
 # Agent / LLM
 GEMINI_API_KEY=<your Google AI Studio key from aistudio.google.com>
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-2.5-flash
 LLM_PROVIDER=gemini
 MAX_CODER_RETRIES=2
 ```
