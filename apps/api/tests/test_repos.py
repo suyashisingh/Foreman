@@ -1,7 +1,8 @@
-"""Tests for repo registration, chunking logic, and /api/v1/repos endpoints.
+"""Tests for chunking logic and /api/v1/repos HTTP endpoints.
 
-Network calls (GitPython clone, Voyage API) are fully mocked so no live
-services are needed beyond the test Postgres instance wired up in conftest.py.
+The POST /repos endpoint now returns 202 immediately and enqueues an ARQ job;
+it no longer runs the pipeline synchronously.  Pipeline execution is tested in
+test_workers.py.
 """
 
 import ast
@@ -9,66 +10,14 @@ import textwrap
 from pathlib import Path
 
 import pytest
-import pytest_asyncio
 
 from app.retrieval.chunking import _extract_symbols, chunk_repo
 
 # ---------------------------------------------------------------------------
-# Helpers / fixtures
+# Constants
 # ---------------------------------------------------------------------------
 
-REGISTER_URL = "/api/v1/auth/register"
-LOGIN_URL = "/api/v1/auth/login"
 REPOS_URL = "/api/v1/repos"
-
-_USER = {"email": "repouser@example.com", "password": "repopassword1", "name": "Repo"}
-
-# Fake 1024-dim embeddings (matches voyage-code-3 output dimension).
-_FAKE_EMBED_DIM = 1024
-
-
-def _fake_embeddings(n: int) -> list[list[float]]:
-    return [[0.1] * _FAKE_EMBED_DIM for _ in range(n)]
-
-
-@pytest_asyncio.fixture
-async def auth_client(client):
-    """Return an AsyncClient pre-loaded with a valid Bearer token."""
-    reg = await client.post(REGISTER_URL, json=_USER)
-    assert reg.status_code == 201
-    token = reg.json()["access_token"]
-    client.headers.update({"Authorization": f"Bearer {token}"})
-    return client
-
-
-@pytest.fixture
-def fake_repo_dir(tmp_path: Path) -> Path:
-    """A tiny fake cloned repo with two Python source files."""
-    (tmp_path / "calculator.py").write_text(
-        textwrap.dedent("""\
-            class Calculator:
-                \"\"\"A simple calculator.\"\"\"
-
-                def add(self, a: int, b: int) -> int:
-                    return a + b
-
-                def subtract(self, a: int, b: int) -> int:
-                    return a - b
-
-            def greet(name: str) -> str:
-                return f"Hello, {name}!"
-        """)
-    )
-    (tmp_path / "utils.py").write_text(
-        textwrap.dedent("""\
-            import os
-
-            def get_env(key: str, default: str = "") -> str:
-                return os.environ.get(key, default)
-        """)
-    )
-    return tmp_path
-
 
 # ---------------------------------------------------------------------------
 # Unit tests: chunking logic
@@ -167,115 +116,53 @@ async def test_get_repos_requires_auth(client):
 
 
 # ---------------------------------------------------------------------------
-# Endpoint tests: happy path
+# Endpoint tests: GET list and detail against in-flight repos
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_register_repo_success(auth_client, fake_repo_dir, mocker):
-    """POST /repos clones, chunks, embeds, and returns a ready repo."""
-    expected_chunks = chunk_repo(fake_repo_dir)
-
-    mocker.patch(
-        "app.routers.repos.clone_repo",
-        return_value=fake_repo_dir,
-    )
-    mocker.patch(
-        "app.routers.repos.remove_clone",
-    )
-    mocker.patch(
-        "app.routers.repos.embed_texts",
-        return_value=_fake_embeddings(len(expected_chunks)),
-    )
-
+async def test_get_repos_lists_pending_repo(auth_client, mock_arq_pool):
+    """A repo in status=pending is visible in GET /repos immediately."""
     resp = await auth_client.post(
         REPOS_URL,
-        json={
-            "name": "my-repo",
-            "clone_url": "https://github.com/example/repo.git",
-            "default_branch": "main",
-        },
+        json={"name": "pending-repo", "clone_url": "https://github.com/x/y.git"},
     )
-    assert resp.status_code == 201, resp.text
-    body = resp.json()
-    assert body["status"] == "ready"
-    assert body["name"] == "my-repo"
-    assert body["chunk_count"] == len(expected_chunks)
-    assert body["error_message"] is None
-
-
-@pytest.mark.asyncio
-async def test_register_repo_stores_chunks_in_db(auth_client, fake_repo_dir, mocker):
-    """Chunk rows are actually persisted to the database."""
-    expected_chunks = chunk_repo(fake_repo_dir)
-
-    mocker.patch("app.routers.repos.clone_repo", return_value=fake_repo_dir)
-    mocker.patch("app.routers.repos.remove_clone")
-    mocker.patch(
-        "app.routers.repos.embed_texts",
-        return_value=_fake_embeddings(len(expected_chunks)),
-    )
-
-    post_resp = await auth_client.post(
-        REPOS_URL,
-        json={"name": "stored-repo", "clone_url": "https://github.com/x/y.git"},
-    )
-    assert post_resp.status_code == 201
-    repo_id = post_resp.json()["id"]
-
-    get_resp = await auth_client.get(f"{REPOS_URL}/{repo_id}")
-    assert get_resp.status_code == 200
-    assert get_resp.json()["chunk_count"] == len(expected_chunks)
-
-
-@pytest.mark.asyncio
-async def test_list_repos_returns_registered_repo(auth_client, fake_repo_dir, mocker):
-    """GET /repos returns the repo after it has been registered."""
-    chunks = chunk_repo(fake_repo_dir)
-    mocker.patch("app.routers.repos.clone_repo", return_value=fake_repo_dir)
-    mocker.patch("app.routers.repos.remove_clone")
-    mocker.patch(
-        "app.routers.repos.embed_texts", return_value=_fake_embeddings(len(chunks))
-    )
-
-    await auth_client.post(
-        REPOS_URL,
-        json={"name": "listed-repo", "clone_url": "https://github.com/a/b.git"},
-    )
+    assert resp.status_code == 202
 
     list_resp = await auth_client.get(REPOS_URL)
     assert list_resp.status_code == 200
     names = [r["name"] for r in list_resp.json()]
-    assert "listed-repo" in names
-
-
-# ---------------------------------------------------------------------------
-# Endpoint tests: failure path
-# ---------------------------------------------------------------------------
+    assert "pending-repo" in names
 
 
 @pytest.mark.asyncio
-async def test_clone_failure_sets_repo_failed(auth_client, mocker):
-    """A clone error returns 422 and leaves the repo with status=failed."""
-    from app.retrieval.cloning import CloneError
-
-    mocker.patch(
-        "app.routers.repos.clone_repo",
-        side_effect=CloneError("invalid URL"),
-    )
-    mocker.patch("app.routers.repos.remove_clone")
-
-    resp = await auth_client.post(
+async def test_get_repo_detail_works_for_pending(auth_client, mock_arq_pool):
+    """GET /repos/{id} returns correct data for a repo still being ingested."""
+    post_resp = await auth_client.post(
         REPOS_URL,
-        json={"name": "bad-repo", "clone_url": "not-a-url"},
+        json={"name": "in-flight", "clone_url": "https://github.com/x/y.git"},
     )
-    assert resp.status_code == 422
-    assert "clone" in resp.json()["detail"].lower()
+    assert post_resp.status_code == 202
+    repo_id = post_resp.json()["id"]
 
-    # The repo row must exist with status=failed.
-    list_resp = await auth_client.get(REPOS_URL)
-    repos = list_resp.json()
-    bad = next((r for r in repos if r["name"] == "bad-repo"), None)
-    assert bad is not None
-    assert bad["status"] == "failed"
-    assert bad["error_message"] is not None
+    get_resp = await auth_client.get(f"{REPOS_URL}/{repo_id}")
+    assert get_resp.status_code == 200
+    body = get_resp.json()
+    assert body["status"] == "pending"
+    assert body["chunk_count"] == 0
+    assert body["error_message"] is None
+
+
+@pytest.mark.asyncio
+async def test_search_requires_ready_status(auth_client, mock_arq_pool):
+    """GET /repos/{id}/search returns 422 if the repo is not ready."""
+    post_resp = await auth_client.post(
+        REPOS_URL,
+        json={"name": "not-ready", "clone_url": "https://github.com/x/y.git"},
+    )
+    repo_id = post_resp.json()["id"]
+
+    search_resp = await auth_client.get(
+        f"{REPOS_URL}/{repo_id}/search", params={"q": "hello"}
+    )
+    assert search_resp.status_code == 422

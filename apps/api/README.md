@@ -81,7 +81,23 @@ uv run uvicorn app.main:app --reload --port 8000
 
 ---
 
-## 5. Run tests
+## 5. Run the ARQ worker
+
+The ingestion pipeline runs in a separate worker process. Start it in a second
+terminal after the API and infrastructure are running:
+
+```bash
+cd apps/api
+uv run arq app.workers.settings.WorkerSettings
+```
+
+The worker connects to Redis (from `REDIS_URL`) and pulls jobs off the queue as
+they arrive.  You can run multiple worker processes for parallelism; the default
+`max_jobs` cap is 4 concurrent ingestion jobs per worker.
+
+---
+
+## 6. Run tests
 
 ```bash
 cd apps/api
@@ -92,7 +108,7 @@ Tests mock both Postgres and Redis — no live services required to run the suit
 
 ---
 
-## 6. API endpoints
+## 7. API endpoints
 
 ### Auth
 
@@ -106,24 +122,60 @@ Tests mock both Postgres and Redis — no live services required to run the suit
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/v1/repos` | Register a repo: clone → chunk → embed → store. |
+| `POST` | `/api/v1/repos` | Register a repo for ingestion (returns **202 Accepted**). |
 | `GET`  | `/api/v1/repos` | List all repos owned by the caller. |
-| `GET`  | `/api/v1/repos/{id}` | Get one repo's details and chunk count. |
+| `GET`  | `/api/v1/repos/{id}` | Get one repo's details, status, and chunk count. |
+| `GET`  | `/api/v1/repos/{id}/search` | Search a ready repo by natural-language query. |
 
 All `/repos` endpoints require `Authorization: Bearer <token>`.
 
-#### Ingestion pipeline
+#### Async ingestion flow
 
-`POST /api/v1/repos` runs synchronously in the request handler (ARQ background
-task coming next):
+`POST /api/v1/repos` returns **202 Accepted** immediately.  The heavy work runs
+in the ARQ worker process through these status transitions:
+
+```
+pending → cloning → chunking → embedding → ready
+                                          ↘ failed  (on any error)
+```
+
+Poll `GET /api/v1/repos/{id}` to observe the status.  When `status` is `"ready"`,
+`chunk_count` reflects the number of indexed code symbols and search is available.
+On `"failed"`, `error_message` contains a human-readable reason.
+
+Pipeline steps:
 
 1. **Clone** — shallow clone (`depth=1`) into `REPO_CLONE_DIR/<repo_id>` via GitPython.
 2. **Chunk** — walk every `.py` file with `ast`; extract each `FunctionDef`,
    `AsyncFunctionDef`, and `ClassDef` (including class methods) as its own chunk.
    Files that fail to parse or have no symbols fall back to a whole-file chunk.
-3. **Embed** — batch chunks in groups of 128, send to `voyage-code-3` via Voyage AI.
+3. **Embed** — batch chunks in groups of 128, send to `voyage-code-3` via Voyage AI
+   with `input_type="document"` for asymmetric retrieval.
 4. **Store** — persist `RepoChunk` rows (file path, symbol name, content, 1024-dim
    embedding vector) to Postgres via pgvector.
 
-On failure, the `Repo` row remains in the database with `status=failed` and an
-`error_message` for debugging.
+#### Search endpoint
+
+```
+GET /api/v1/repos/{id}/search?q=<query>&top_k=5
+```
+
+Returns `422 Unprocessable Entity` if the repo is not yet `ready`.
+
+On success, returns a JSON array of ranked results ordered by cosine similarity
+(highest first):
+
+```json
+[
+  {
+    "file_path": "calculator.py",
+    "symbol_name": "Calculator.add",
+    "content": "def add(self, a, b):\n    return a + b",
+    "similarity": 0.87
+  }
+]
+```
+
+`similarity` is `1 − cosine_distance`, ranging from `1.0` (identical direction)
+to `-1.0` (opposite).  The query is embedded with `input_type="query"` for
+asymmetric retrieval against the `"document"` indexed chunks.

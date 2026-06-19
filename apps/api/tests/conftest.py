@@ -1,7 +1,8 @@
 """Shared test fixtures.
 
-JWT_SECRET_KEY is injected into os.environ BEFORE any app module is imported so
-that pydantic-settings doesn't raise a ValidationError at collection time.
+JWT_SECRET_KEY and VOYAGE_API_KEY are injected into os.environ BEFORE any
+app module is imported so that pydantic-settings doesn't raise a
+ValidationError at collection time.
 """
 
 import os
@@ -14,6 +15,11 @@ os.environ.setdefault(
 )
 os.environ.setdefault("VOYAGE_API_KEY", "test-voyage-key-not-real")
 
+import textwrap
+from pathlib import Path
+from unittest.mock import AsyncMock
+
+import pytest
 import pytest_asyncio
 import sqlalchemy as sa
 from httpx import ASGITransport, AsyncClient
@@ -57,9 +63,38 @@ async def _truncate_tables():
         )
 
 
+# ---------------------------------------------------------------------------
+# DB access fixtures (for task-level and search tests that bypass HTTP)
+# ---------------------------------------------------------------------------
+
+
 @pytest_asyncio.fixture
-async def client():
-    """AsyncClient wired to the FastAPI app with the test DB session injected."""
+async def db():
+    """An AsyncSession for direct DB manipulation in tests."""
+    async with _TestSession() as session:
+        yield session
+
+
+@pytest.fixture
+def session_factory():
+    """The test async_sessionmaker — pass as ctx['session_factory'] to tasks."""
+    return _TestSession
+
+
+# ---------------------------------------------------------------------------
+# HTTP client fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mock_arq_pool():
+    """A mock ARQ pool that records enqueue_job calls without hitting Redis."""
+    return AsyncMock()
+
+
+@pytest_asyncio.fixture
+async def client(mock_arq_pool):
+    """AsyncClient wired to the FastAPI app with test overrides injected."""
     app = create_app()
 
     async def _override_get_db():
@@ -67,8 +102,60 @@ async def client():
             yield session
 
     app.dependency_overrides[_deps.get_db] = _override_get_db
+    app.dependency_overrides[_deps.get_arq_pool] = lambda: mock_arq_pool
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as ac:
         yield ac
+
+
+_AUTH_USER = {
+    "email": "testuser@example.com",
+    "password": "testpassword1",
+    "name": "Test",
+}
+
+
+@pytest_asyncio.fixture
+async def auth_client(client):
+    """AsyncClient pre-loaded with a valid Bearer token."""
+    reg = await client.post("/api/v1/auth/register", json=_AUTH_USER)
+    assert reg.status_code == 201
+    token = reg.json()["access_token"]
+    client.headers.update({"Authorization": f"Bearer {token}"})
+    return client
+
+
+# ---------------------------------------------------------------------------
+# Shared test data fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def fake_repo_dir(tmp_path: Path) -> Path:
+    """A tiny fake cloned repo with two Python source files."""
+    (tmp_path / "calculator.py").write_text(
+        textwrap.dedent("""\
+            class Calculator:
+                \"\"\"A simple calculator.\"\"\"
+
+                def add(self, a: int, b: int) -> int:
+                    return a + b
+
+                def subtract(self, a: int, b: int) -> int:
+                    return a - b
+
+            def greet(name: str) -> str:
+                return f"Hello, {name}!"
+        """)
+    )
+    (tmp_path / "utils.py").write_text(
+        textwrap.dedent("""\
+            import os
+
+            def get_env(key: str, default: str = "") -> str:
+                return os.environ.get(key, default)
+        """)
+    )
+    return tmp_path

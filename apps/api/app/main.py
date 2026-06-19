@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 import redis.asyncio as aioredis
+from arq import create_pool
+from arq.connections import RedisSettings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -24,15 +26,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Starting Foreman API", extra={"environment": settings.ENVIRONMENT})
 
     init_engine()
-    # from_url is synchronous; it returns a Redis client that uses async I/O.
+
+    # Redis client used by the health-check readiness probe.
     app.state.redis = aioredis.from_url(
         settings.REDIS_URL,
         decode_responses=True,
     )
 
+    # ARQ pool used by route handlers to enqueue background jobs.
+    # This is a separate connection from app.state.redis — ARQ manages its own
+    # protocol framing and should not share the general-purpose client.
+    app.state.arq_pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
+
     yield
 
     logger.info("Shutting down Foreman API")
+    await app.state.arq_pool.aclose()
     await app.state.redis.aclose()
     await close_engine()
 

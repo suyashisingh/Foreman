@@ -2,13 +2,14 @@
 
 ``get_db``          — yields an async SQLAlchemy session per request.
 ``get_current_user``— validates the Bearer JWT and returns the authenticated User.
+``get_arq_pool``    — returns the application-scoped ARQ job queue pool.
 """
 
 import uuid
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +18,11 @@ from app.core.security import decode_access_token
 from app.db.models import User
 
 _bearer = HTTPBearer()
+
+
+async def get_arq_pool(request: Request) -> Any:
+    """Return the application-scoped ARQ job queue pool from app state."""
+    return request.app.state.arq_pool
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

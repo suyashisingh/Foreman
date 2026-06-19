@@ -1,4 +1,4 @@
-"""Pydantic schemas for repo registration and retrieval endpoints."""
+"""Pydantic schemas for repo registration, retrieval, and search endpoints."""
 
 import uuid
 from datetime import datetime
@@ -35,3 +35,12 @@ class RepoDetail(RepoOut):
     """Extended repo representation that includes the stored chunk count."""
 
     chunk_count: int
+
+
+class ChunkSearchResult(BaseModel):
+    """One ranked result from GET /api/v1/repos/{id}/search."""
+
+    file_path: str
+    symbol_name: str | None
+    content: str
+    similarity: float  # 1.0 = identical, -1.0 = opposite; higher is more relevant

@@ -41,6 +41,7 @@ class RepoStatus(str, enum.Enum):
     pending = "pending"
     cloning = "cloning"
     chunking = "chunking"
+    embedding = "embedding"
     ready = "ready"
     failed = "failed"
 
