@@ -157,7 +157,12 @@ async def register_repo(
             detail="Storing chunks failed unexpectedly.",
         ) from exc
     finally:
-        await asyncio.to_thread(remove_clone, repo_id)
+        try:
+            await asyncio.to_thread(remove_clone, repo_id)
+        except Exception:
+            logger.warning(
+                "Failed to remove clone directory", extra={"repo_id": repo_id}
+            )
 
     chunk_count = len(chunks)
     logger.info(

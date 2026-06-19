@@ -5,7 +5,9 @@ using GitPython with depth=1 (current snapshot only, no history).
 """
 
 import logging
+import os
 import shutil
+import stat
 from pathlib import Path
 
 import git
@@ -87,5 +89,11 @@ def remove_clone(repo_id: str) -> None:
     """
     dest = Path(settings.REPO_CLONE_DIR) / repo_id
     if dest.exists():
-        shutil.rmtree(dest)
+        # Git pack files are read-only on Windows; chmod before delete.
+        def _force_writable(func: object, path: str, _exc: object) -> None:
+            os.chmod(path, stat.S_IWRITE)
+            if callable(func):
+                func(path)  # type: ignore[operator]
+
+        shutil.rmtree(dest, onexc=_force_writable)
         logger.debug("Removed clone directory", extra={"dest": str(dest)})
