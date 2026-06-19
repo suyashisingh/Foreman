@@ -12,6 +12,7 @@ os.environ.setdefault(
     "DATABASE_URL",
     "postgresql+asyncpg://foreman:foreman_secret@localhost:5434/foreman_test",
 )
+os.environ.setdefault("VOYAGE_API_KEY", "test-voyage-key-not-real")
 
 import pytest_asyncio
 import sqlalchemy as sa

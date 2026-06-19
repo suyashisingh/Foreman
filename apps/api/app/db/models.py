@@ -35,6 +35,16 @@ from app.db.base import Base
 # ---------------------------------------------------------------------------
 
 
+class RepoStatus(str, enum.Enum):
+    """Lifecycle states for a registered repository."""
+
+    pending = "pending"
+    cloning = "cloning"
+    chunking = "chunking"
+    ready = "ready"
+    failed = "failed"
+
+
 class RunStatus(str, enum.Enum):
     """Lifecycle states for an agent run."""
 
@@ -60,6 +70,7 @@ class AgentRole(str, enum.Enum):
 # SQLAlchemy Enum type objects (native Postgres ENUM, not VARCHAR)
 # ---------------------------------------------------------------------------
 
+_repo_status_pg = Enum(RepoStatus, name="repo_status", create_type=True)
 _run_status_pg = Enum(RunStatus, name="run_status", create_type=True)
 _agent_role_pg = Enum(AgentRole, name="agent_role", create_type=True)
 
@@ -106,6 +117,10 @@ class Repo(Base):
     default_branch: Mapped[str] = mapped_column(
         String(255), nullable=False, server_default="main"
     )
+    status: Mapped[RepoStatus] = mapped_column(
+        _repo_status_pg, nullable=False, server_default="pending"
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -233,7 +248,8 @@ class RepoChunk(Base):
     file_path: Mapped[str] = mapped_column(Text, nullable=False)
     symbol_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
+    # voyage-code-3 outputs 1024-dimensional embeddings by default.
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), nullable=True)
 
     repo: Mapped[Repo] = relationship(back_populates="chunks")
 

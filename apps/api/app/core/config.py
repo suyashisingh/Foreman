@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRY_MINUTES: int = 1440  # 24 h — convenient for dev, override in prod
 
+    # --- Retrieval / embeddings ---
+    # No default: the app must not start without a configured embedding provider.
+    VOYAGE_API_KEY: str
+    # voyage-code-3 is Voyage AI's code-specialized model (1024-dim, optimised for
+    # semantic code search) — the natural fit for a codebase-RAG use case.
+    VOYAGE_MODEL: str = "voyage-code-3"
+    # Where cloned repos are staged on disk before/during chunking.
+    REPO_CLONE_DIR: str = "/tmp/foreman-repos"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
