@@ -24,6 +24,7 @@ Adding a new provider
 
 import asyncio
 import logging
+import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -39,7 +40,24 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
-_MAX_RETRIES = 1  # one retry after the initial attempt, matching Voyage pattern
+_MAX_RETRIES = 3  # up to 3 retries; 429s get a longer wait (see below)
+_RATE_LIMIT_FALLBACK_WAIT = 60.0  # seconds to wait on 429 when no retryDelay given
+
+
+def _retry_wait(exc: Exception, attempt: int) -> float:
+    """Return seconds to sleep before the next attempt.
+
+    For 429 RESOURCE_EXHAUSTED responses the Gemini API includes a
+    ``retryDelay`` field (e.g. ``'44s'``) in the error details.  We parse
+    that and add a small buffer so we don't immediately hit the limit again.
+    For all other errors we use exponential back-off (2, 4, 8 s).
+    """
+    msg = str(exc)
+    if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+        m = re.search(r"retry in (\d+(?:\.\d+)?)", msg, re.IGNORECASE)
+        delay = float(m.group(1)) if m else _RATE_LIMIT_FALLBACK_WAIT
+        return delay + 5.0  # small buffer on top of the API-specified delay
+    return 2.0 ** (attempt + 1)
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +192,7 @@ class GeminiClient(LLMClient):
             except Exception as exc:
                 last_exc = exc
                 if attempt < _MAX_RETRIES:
-                    wait = 2.0 ** (attempt + 1)
+                    wait = _retry_wait(exc, attempt)
                     logger.warning(
                         "Gemini API error — retrying",
                         extra={

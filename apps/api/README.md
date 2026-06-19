@@ -104,6 +104,10 @@ The worker connects to Redis (from `REDIS_URL`) and pulls jobs off the queue as
 they arrive.  You can run multiple worker processes for parallelism; the default
 `max_jobs` cap is 4 concurrent ingestion jobs per worker.
 
+> **Troubleshooting:** If a code or `.env` change doesn't seem to take effect,
+> restart the ARQ worker process — it holds Python state in memory and won't
+> pick up changes until restarted.
+
 ---
 
 ## 6. Run tests
