@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.agents.state import AgentState
 from app.core.config import settings
 from app.db.models import Repo, RepoChunk, RepoStatus, Run, RunStatus
+from app.orchestrator import events as _events
 from app.orchestrator.graph import build_graph
 from app.retrieval.chunking import chunk_repo
 from app.retrieval.cloning import CloneError, clone_repo, remove_clone
@@ -161,6 +162,7 @@ async def _set_run_failed(db: AsyncSession, run: Run, error: str) -> None:
     """Transition *run* to ``failed`` and record completion time."""
     run.status = RunStatus.failed
     run.completed_at = datetime.now(timezone.utc)
+    run_id = run.id
     try:
         await db.commit()
     except Exception:
@@ -169,6 +171,8 @@ async def _set_run_failed(db: AsyncSession, run: Run, error: str) -> None:
             extra={"run_id": str(run.id), "error": error},
         )
         await db.rollback()
+        return
+    await _events.publish_run_event(run_id, "status_change", {"status": "failed"})
 
 
 async def execute_run(ctx: dict, run_id: str) -> None:
@@ -199,6 +203,7 @@ async def execute_run(ctx: dict, run_id: str) -> None:
 
         run.status = RunStatus.planning
         await db.commit()
+        await _events.publish_run_event(rid, "status_change", {"status": "planning"})
 
         repo_id: uuid.UUID = run.repo_id
         issue_text: str = run.issue_text
@@ -257,6 +262,9 @@ async def execute_run(ctx: dict, run_id: str) -> None:
                     run.status = RunStatus.awaiting_approval
                     run.completed_at = datetime.now(timezone.utc)
                     await db.commit()
+                    await _events.publish_run_event(
+                        rid, "status_change", {"status": "awaiting_approval"}
+                    )
 
         plan = final_state.get("plan") or {}
         diffs = final_state.get("diffs") or []

@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import AgentRole, AgentStep
+from app.orchestrator import events
 
 logger = logging.getLogger(__name__)
 
@@ -70,4 +71,17 @@ async def log_agent_step(
             "output_tokens": token_usage.get("output_tokens"),
         },
     )
+
+    await events.publish_run_event(
+        run_id,
+        "agent_step",
+        {
+            "agent": agent.value,
+            "step_index": step_index,
+            "latency_ms": latency_ms,
+            "input_tokens": token_usage.get("input_tokens"),
+            "output_tokens": token_usage.get("output_tokens"),
+        },
+    )
+
     return step

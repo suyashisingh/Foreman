@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { AuthProvider } from "@/lib/auth-context";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,8 +21,8 @@ export const metadata: Metadata = {
 
 const navLinks = [
   { href: "/", label: "Home" },
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/login", label: "Login" },
-  { href: "/runs", label: "Runs" },
   { href: "/benchmark", label: "Benchmark" },
 ] as const;
 
@@ -52,7 +53,9 @@ export default function RootLayout({
             </div>
           </nav>
         </header>
-        <main className="flex-1">{children}</main>
+        <AuthProvider>
+          <main className="flex-1">{children}</main>
+        </AuthProvider>
       </body>
     </html>
   );

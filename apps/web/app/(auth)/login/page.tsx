@@ -1,5 +1,8 @@
-// TODO (auth backend — Day 2): Wire the form to POST /auth/login.
-// The submit handler is currently a no-op; the auth backend does not exist yet.
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,9 +12,36 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
+import { ApiError } from "@/lib/api-client";
 
 export default function LoginPage() {
+  const { login } = useAuth();
+  const router = useRouter();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setPending(true);
+    try {
+      await login(email, password);
+      router.push("/dashboard");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.detail);
+      } else {
+        setError("An unexpected error occurred. Please try again.");
+      }
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <div className="flex min-h-full items-center justify-center px-4 py-12">
       <Card className="w-full max-w-sm">
@@ -22,19 +52,19 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {/* form is UI-only; action is a no-op until auth backend exists */}
-          <form className="space-y-4" action="#">
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-1">
               <label htmlFor="email" className="text-sm font-medium">
                 Email
               </label>
               <Input
                 id="email"
-                name="email"
                 type="email"
                 autoComplete="email"
                 required
                 placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
 
@@ -44,16 +74,23 @@ export default function LoginPage() {
               </label>
               <Input
                 id="password"
-                name="password"
                 type="password"
                 autoComplete="current-password"
                 required
                 placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
             </div>
 
-            <Button type="submit" className="w-full">
-              Sign in
+            {error && (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            )}
+
+            <Button type="submit" className="w-full" disabled={pending}>
+              {pending ? "Signing in…" : "Sign in"}
             </Button>
           </form>
 
