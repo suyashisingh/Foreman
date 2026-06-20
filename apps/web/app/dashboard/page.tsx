@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthGuard } from "@/components/auth-guard";
 import { Badge } from "@/components/ui/badge";
@@ -229,7 +229,8 @@ function DashboardContent() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedRepo, setSelectedRepo] = useState<RepoDetail | null>(null);
 
-  const fetchRepos = useCallback(async () => {
+  // Stable refresh callback for the "Register" form's onRegistered prop.
+  const refreshRepos = useCallback(async () => {
     if (!token) return;
     try {
       const data = await api.listRepos(token);
@@ -241,10 +242,22 @@ function DashboardContent() {
   }, [token]);
 
   useEffect(() => {
-    fetchRepos();
-    const id = setInterval(fetchRepos, POLL_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [fetchRepos]);
+    if (!token) return;
+    let active = true;
+
+    async function load() {
+      try {
+        const data = await api.listRepos(token!);
+        if (active) { setRepos(data); setLoadError(null); }
+      } catch {
+        if (active) setLoadError("Failed to load repositories.");
+      }
+    }
+
+    void load();
+    const id = setInterval(() => void load(), POLL_INTERVAL_MS);
+    return () => { active = false; clearInterval(id); };
+  }, [token]);
 
   function handleRunCreated(runId: string) {
     setSelectedRepo(null);
@@ -265,7 +278,7 @@ function DashboardContent() {
         </Button>
       </div>
 
-      <RegisterRepoForm token={token!} onRegistered={fetchRepos} />
+      <RegisterRepoForm token={token!} onRegistered={refreshRepos} />
 
       <section>
         <h2 className="text-lg font-medium mb-4">Repositories</h2>

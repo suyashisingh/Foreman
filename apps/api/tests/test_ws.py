@@ -6,6 +6,7 @@ database that the app's lifespan connects to when the TestClient starts.
 """
 
 import asyncio
+import os
 import uuid
 
 import pytest
@@ -17,8 +18,11 @@ from app.core.security import create_access_token
 from app.db.models import Repo, RepoStatus, Run, RunStatus, User
 from app.main import create_app
 
-# Same URL that conftest.py injects into the environment before app import.
-_DB_URL = "postgresql+asyncpg://foreman:foreman_secret@localhost:5434/foreman_test"
+# Conftest injects DATABASE_URL before any app import; fall back to local dev port.
+_DB_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql+asyncpg://foreman:foreman_secret@localhost:5434/foreman_test",
+)
 
 
 def _seed_ws_data() -> tuple[str, str, uuid.UUID]:

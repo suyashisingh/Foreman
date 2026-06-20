@@ -13,7 +13,6 @@ vi.mock("@/lib/api-client", () => ({
 import * as api from "@/lib/api-client";
 
 const mockLogin = vi.mocked(api.login);
-const mockRegister = vi.mocked(api.register);
 const mockGetCurrentUser = vi.mocked(api.getCurrentUser);
 
 // Mock localStorage

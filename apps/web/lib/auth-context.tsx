@@ -36,7 +36,11 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const TOKEN_KEY = "foreman_token";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
+  // Lazy initializer reads localStorage once at mount — no synchronous setState
+  // in effects needed for the initial token restore.
+  const [token, setToken] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null,
+  );
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -53,13 +57,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const stored = localStorage.getItem(TOKEN_KEY);
-    if (stored) {
-      setToken(stored);
-      fetchUser(stored).finally(() => setLoading(false));
-    } else {
+    async function init() {
+      const stored = localStorage.getItem(TOKEN_KEY);
+      if (stored) {
+        await fetchUser(stored);
+      }
       setLoading(false);
     }
+    void init();
   }, [fetchUser]);
 
   const login = useCallback(async (email: string, password: string) => {
