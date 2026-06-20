@@ -22,7 +22,7 @@ import uuid
 from typing import Any
 
 from e2b import AsyncSandbox
-from e2b.sandbox_async.commands.command_handle import CommandExitException
+from e2b.sandbox.commands.command_handle import CommandExitException
 
 from app.agents.state import AgentState
 from app.db import session as _db_session
@@ -81,7 +81,8 @@ async def tester_node(state: AgentState) -> dict[str, Any]:
     try:
         # Install the repo's own package so test-suite imports resolve.
         await sandbox.commands.run(
-            f"pip install -e {_REPO_DIR} -q", timeout=90,
+            f"pip install -e {_REPO_DIR} -q",
+            timeout=90,
         )
     except Exception:
         logger.warning(

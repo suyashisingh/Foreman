@@ -48,7 +48,7 @@ def _make_sandbox_mock(
     returns a CommandResult object when exit_code == 0.
     """
     from e2b import CommandResult
-    from e2b.sandbox_async.commands.command_handle import CommandExitException
+    from e2b.sandbox.commands.command_handle import CommandExitException
 
     sandbox = AsyncMock()
     sandbox.sandbox_id = "tester-sandbox-xyz"

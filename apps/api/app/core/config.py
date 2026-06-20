@@ -41,14 +41,16 @@ class Settings(BaseSettings):
     # No default: the app must not start without a configured LLM provider key.
     GEMINI_API_KEY: str
     # Free-tier Gemini model availability shifted several times during development:
-    #   gemini-2.0-flash  → original default; daily quota exhausted on dev account
-    #   gemini-2.5-flash  → replacement; only 20 RPD free-tier, exhausted quickly
-    #   gemini-2.5-flash-lite → quota available but too weak for the Coder node:
+    #   gemini-2.0-flash       → original default; daily quota exhausted on dev account
+    #   gemini-2.5-flash       → replacement; only 20 RPD free-tier, exhausted quickly
+    #   gemini-2.5-flash-lite  → quota available but too weak for the Coder node:
     #       it read the target file then returned ~29 output tokens ("done") instead
     #       of calling write_file, producing an empty diff every time
-    #   gemini-3.5-flash  → current default; confirmed working in live E2E testing
+    #   gemini-3.5-flash       → exhausted (20 RPD) during Day 4 live testing
+    #   gemini-3.1-flash-lite  → current default; confirmed working for structured
+    #       output (Planner) and tool calling (Coder) in live Day 4 E2E testing
     # If you hit 429s, probe model availability before switching (see README).
-    GEMINI_MODEL: str = "gemini-3.5-flash"
+    GEMINI_MODEL: str = "gemini-3.1-flash-lite"
     # Selects which LLMClient implementation get_llm_client() returns.
     # Only "gemini" is implemented; add cases to llm_client.py to extend.
     LLM_PROVIDER: str = "gemini"
