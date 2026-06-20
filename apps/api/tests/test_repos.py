@@ -161,7 +161,10 @@ async def test_post_repos_only_name_and_clone_url_defaults_branch(
     and the created repo's default_branch is 'main'."""
     resp = await auth_client.post(
         REPOS_URL,
-        json={"name": "iniconfig", "clone_url": "https://github.com/pytest-dev/iniconfig.git"},
+        json={
+            "name": "iniconfig",
+            "clone_url": "https://github.com/pytest-dev/iniconfig.git",
+        },
     )
     assert resp.status_code == 202, resp.text
     body = resp.json()
