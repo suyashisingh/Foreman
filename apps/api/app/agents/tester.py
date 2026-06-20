@@ -75,14 +75,18 @@ async def tester_node(state: AgentState) -> dict[str, Any]:
     try:
         await sandbox.commands.run("pip install pytest -q", timeout=60)
     except Exception:
-        logger.warning("pip install pytest raised — continuing", extra={"run_id": str(run_id)})
+        logger.warning(
+            "pip install pytest raised — continuing", extra={"run_id": str(run_id)}
+        )
     try:
         # Install the repo's own package so test-suite imports resolve.
         await sandbox.commands.run(
             f"pip install -e {_REPO_DIR} -q", timeout=90,
         )
     except Exception:
-        logger.warning("pip install -e repo raised — continuing", extra={"run_id": str(run_id)})
+        logger.warning(
+            "pip install -e repo raised — continuing", extra={"run_id": str(run_id)}
+        )
 
     # --- Run pytest ---------------------------------------------------------
     # e2b raises CommandExitException for non-zero exit codes (e.g. failing
