@@ -77,3 +77,5 @@ class AgentState(_AgentStateRequired, total=False):
     # Combined stdout + stderr from the most recent `pytest` run; used to
     # build the retry-feedback prompt when the Coder runs again.
     test_output: str | None
+    # Structured review produced by the Reviewer node after tests pass.
+    review: dict[str, Any] | None

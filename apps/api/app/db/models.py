@@ -57,6 +57,7 @@ class RunStatus(str, enum.Enum):
     passed = "passed"
     failed = "failed"
     awaiting_approval = "awaiting_approval"
+    rejected = "rejected"
 
 
 class AgentRole(str, enum.Enum):
@@ -156,6 +157,7 @@ class Run(Base):
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="runs")
     repo: Mapped[Repo] = relationship(back_populates="runs")

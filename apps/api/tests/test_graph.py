@@ -16,7 +16,18 @@ import pytest_asyncio
 
 from app.agents.state import AgentState
 from app.db.models import Repo, RepoStatus, Run, RunStatus, User
-from app.orchestrator.graph import _route_after_tester
+from app.orchestrator.graph import _route_after_tester, build_graph
+
+# ---------------------------------------------------------------------------
+# Graph structure tests
+# ---------------------------------------------------------------------------
+
+
+def test_build_graph_has_reviewer_node() -> None:
+    """build_graph() includes a reviewer node in the compiled graph."""
+    graph = build_graph()
+    assert "reviewer" in graph.nodes
+
 
 # ---------------------------------------------------------------------------
 # _route_after_tester unit tests (pure logic, no I/O)

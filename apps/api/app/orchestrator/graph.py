@@ -3,7 +3,7 @@
 Current graph:
 
     Planner → Coder → Tester
-                      ↓ test_passed=True           → END (awaiting_approval)
+                      ↓ test_passed=True           → Reviewer → END (awaiting_approval)
                       ↓ test_passed=False, retries → Coder  (retry loop)
                       ↓ test_passed=False, exhausted → END (failed)
 
@@ -17,6 +17,7 @@ from langgraph.graph import END, StateGraph
 
 from app.agents.coder import coder_node
 from app.agents.planner import planner_node
+from app.agents.reviewer import reviewer_node
 from app.agents.state import AgentState
 from app.agents.tester import tester_node
 from app.core.config import settings
@@ -50,6 +51,7 @@ def build_graph() -> Any:
     builder.add_node("planner", planner_node)
     builder.add_node("coder", coder_node)
     builder.add_node("tester", tester_node)
+    builder.add_node("reviewer", reviewer_node)
 
     # --- Edges -------------------------------------------------------------
     builder.set_entry_point("planner")
@@ -58,7 +60,8 @@ def build_graph() -> Any:
     builder.add_conditional_edges(
         "tester",
         _route_after_tester,
-        {"pass": END, "retry": "coder", "exhausted": END},
+        {"pass": "reviewer", "retry": "coder", "exhausted": END},
     )
+    builder.add_edge("reviewer", END)
 
     return builder.compile()

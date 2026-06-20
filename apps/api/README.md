@@ -148,7 +148,9 @@ All `/repos` endpoints require `Authorization: Bearer <token>`.
 |--------|------|-------------|
 | `POST` | `/api/v1/runs` | Start an agent run on a ready repo (returns **202 Accepted**). |
 | `GET`  | `/api/v1/runs` | List all runs owned by the caller. |
-| `GET`  | `/api/v1/runs/{id}` | Get run detail including all `agent_steps`. |
+| `GET`  | `/api/v1/runs/{id}` | Get run detail including `agent_steps` and Reviewer `review` output. |
+| `POST` | `/api/v1/runs/{id}/approve` | Approve all diffs and mark the run `passed`. |
+| `POST` | `/api/v1/runs/{id}/reject` | Reject the run (optional `reason` body field); sets status `rejected`. |
 
 All `/runs` endpoints require `Authorization: Bearer <token>`.
 
@@ -170,8 +172,10 @@ belongs to another user.
 the ARQ worker through these status transitions:
 
 ```
-pending → planning → awaiting_approval
-                   ↘ failed  (on any error)
+pending → planning → coding → testing → reviewing → awaiting_approval
+                              ↑     ↘ (retry)                ↘ passed  (POST /approve)
+                              └─────────────────────────────┘ ↘ rejected (POST /reject)
+                                                             ↘ failed  (retries exhausted)
 ```
 
 Poll `GET /api/v1/runs/{id}` to observe progress.  Each node in the graph appends
@@ -186,12 +190,12 @@ provider requires only a new subclass in that file — no node logic changes.
 
 Currently implemented: **Gemini** (`LLM_PROVIDER=gemini`) via the `google-genai` SDK.
 
-#### Agent graph: Planner → Coder ↔ Tester retry loop
+#### Agent graph: Planner → Coder ↔ Tester → Reviewer
 
 ```
-pending → planning → coding → testing → awaiting_approval
-                     ↑    ↘ (retry)       ↘ failed  (retries exhausted or error)
-                     └──────────────────────┘
+pending → planning → coding → testing → reviewing → awaiting_approval
+                     ↑    ↘ (retry)                    ↘ failed  (retries exhausted or error)
+                     └──────────────────────────────────┘
 ```
 
 **Planner** (step 0): retrieves the top-8 most relevant code chunks via pgvector
@@ -236,12 +240,29 @@ rows are deleted and replaced with the cumulative diff.
 
 | Condition | Next step |
 |---|---|
-| `test_passed = True` | END → `awaiting_approval` |
+| `test_passed = True` | Reviewer → END → `awaiting_approval` |
 | `test_passed = False` AND `retry_count < MAX_CODER_RETRIES` | Coder (retry) |
 | `test_passed = False` AND retries exhausted | END → `failed` |
 
 `MAX_CODER_RETRIES = 2` (default) means up to 2 Coder retries (3 total Coder
 invocations) before the run is marked `failed`.
+
+**Reviewer** (step 3, or `3+2*retry_count` after retries): runs after tests pass.
+
+1. Sets `run.status = reviewing`.
+2. Builds a prompt from the issue text, implementation plan, and diffs.
+3. Calls Gemini with `response_schema=ReviewOutput` to produce:
+   - `summary` — what changed and whether it looks correct
+   - `risk_level` — `"low"`, `"medium"`, or `"high"`
+   - `risk_notes` — specific risks or edge cases
+   - `pr_title` — a short, imperative PR title
+   - `pr_description` — markdown bullet-point PR body
+4. Persists an `AgentStep` row; the output is surfaced in `GET /runs/{id}` as `review`.
+
+**Human approval:** after the graph ends, the run is `awaiting_approval`. A human
+inspects `review` in `GET /runs/{id}` and then calls:
+- `POST /runs/{id}/approve` — marks all diffs `approved=True`, sets `status=passed`.
+- `POST /runs/{id}/reject` — sets `status=rejected`, optionally stores `reason`.
 
 New env vars:
 

@@ -32,6 +32,16 @@ class AgentStepOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ReviewOut(BaseModel):
+    """Structured Reviewer output surfaced in GET /api/v1/runs/{id}."""
+
+    summary: str
+    risk_level: str
+    risk_notes: str
+    pr_title: str
+    pr_description: str
+
+
 class RunOut(BaseModel):
     """Summary run representation for list endpoints."""
 
@@ -41,6 +51,7 @@ class RunOut(BaseModel):
     issue_text: str
     created_at: datetime
     completed_at: datetime | None
+    rejection_reason: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -49,3 +60,10 @@ class RunDetail(RunOut):
     """Full run detail including all logged agent steps, ordered by step_index."""
 
     agent_steps: list[AgentStepOut]
+    review: ReviewOut | None = None
+
+
+class RunRejectBody(BaseModel):
+    """Optional body for POST /api/v1/runs/{id}/reject."""
+
+    reason: str | None = None
