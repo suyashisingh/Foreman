@@ -1,56 +1,108 @@
-// TODO (Day 5): Replace placeholder with a real virtualized log list
-// fed by the WS client's log-line messages. Consider react-virtual for
-// large streams.
+"use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useRef } from "react";
 
-/** A single log line emitted during a run. */
-export interface LogLine {
-  /** Monotonically increasing sequence number within the run. */
-  seq: number;
-  /** ISO-8601 timestamp at which the line was emitted. */
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface TimelineEntry {
+  id: string;
   timestamp: string;
-  /** Log severity level. */
-  level: "DEBUG" | "INFO" | "WARNING" | "ERROR";
-  /** Log message text. */
-  message: string;
+  text: string;
+  variant?: "default" | "muted" | "success" | "warning" | "error";
 }
 
-/** Props for the live log stream component. */
 export interface LiveLogStreamProps {
-  /** Ordered list of log lines received so far. */
-  lines: LogLine[];
+  entries: TimelineEntry[];
+  title?: string;
+  emptyText?: string;
 }
 
-const levelColors: Record<LogLine["level"], string> = {
-  DEBUG: "text-muted-foreground",
-  INFO: "text-foreground",
-  WARNING: "text-yellow-600 dark:text-yellow-400",
-  ERROR: "text-red-600 dark:text-red-400",
+// ---------------------------------------------------------------------------
+// Styling
+// ---------------------------------------------------------------------------
+
+const VARIANT_CLASS: Record<NonNullable<TimelineEntry["variant"]>, string> = {
+  default: "text-foreground",
+  muted: "text-muted-foreground",
+  success: "text-green-700 dark:text-green-400",
+  warning: "text-amber-600 dark:text-amber-400",
+  error: "text-red-600 dark:text-red-400",
 };
 
-/** Renders a list of log lines as a scrollable terminal-style card. */
-export function LiveLogStream({ lines }: LiveLogStreamProps) {
+function fmtTs(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export function LiveLogStream({
+  entries,
+  title = "Event Timeline",
+  emptyText = "Waiting for events…",
+}: LiveLogStreamProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
+
+  function onScroll() {
+    const el = containerRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isAtBottomRef.current = distFromBottom < 24;
+  }
+
+  useEffect(() => {
+    if (isAtBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [entries]);
+
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm">Live Log Stream</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="max-h-64 overflow-y-auto rounded bg-muted p-3 font-mono text-xs space-y-0.5">
-          {lines.length === 0 ? (
-            <p className="text-muted-foreground">Waiting for logs…</p>
-          ) : (
-            lines.map((line) => (
-              <p key={line.seq} className={levelColors[line.level]}>
-                <span className="opacity-50">{line.timestamp}</span>{" "}
-                <span className="font-semibold">[{line.level}]</span>{" "}
-                {line.message}
-              </p>
-            ))
-          )}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="rounded-lg border border-border overflow-hidden">
+      <div className="bg-muted/50 px-3 py-2 border-b border-border">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {title}
+        </p>
+      </div>
+
+      <div
+        ref={containerRef}
+        onScroll={onScroll}
+        className="max-h-56 overflow-y-auto bg-background font-mono text-xs"
+      >
+        {entries.length === 0 ? (
+          <p className="px-3 py-4 text-muted-foreground">{emptyText}</p>
+        ) : (
+          <div className="py-1">
+            {entries.map((entry) => (
+              <div
+                key={entry.id}
+                className={`flex gap-2 px-3 py-0.5 hover:bg-muted/40 ${
+                  VARIANT_CLASS[entry.variant ?? "default"]
+                }`}
+              >
+                <span className="shrink-0 text-muted-foreground select-none">
+                  {fmtTs(entry.timestamp)}
+                </span>
+                <span className="break-all">{entry.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+    </div>
   );
 }

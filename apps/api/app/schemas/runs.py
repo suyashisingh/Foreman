@@ -42,6 +42,17 @@ class ReviewOut(BaseModel):
     pr_description: str
 
 
+class DiffOut(BaseModel):
+    """One file diff awaiting human approval."""
+
+    id: uuid.UUID
+    file_path: str
+    patch: str
+    approved: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class RunOut(BaseModel):
     """Summary run representation for list endpoints."""
 
@@ -61,6 +72,7 @@ class RunDetail(RunOut):
 
     agent_steps: list[AgentStepOut]
     review: ReviewOut | None = None
+    diffs: list[DiffOut] = []
 
 
 class RunRejectBody(BaseModel):

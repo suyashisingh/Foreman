@@ -17,7 +17,13 @@ from sqlalchemy.orm import selectinload
 
 from app.core.deps import get_arq_pool, get_current_user, get_db
 from app.db.models import AgentRole, Repo, RepoStatus, Run, RunStatus, User
-from app.schemas.runs import ReviewOut, RunCreate, RunDetail, RunOut, RunRejectBody
+from app.schemas.runs import (
+    ReviewOut,
+    RunCreate,
+    RunDetail,
+    RunOut,
+    RunRejectBody,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +45,13 @@ async def _get_run_or_404(
 ) -> Run:
     """Fetch a run by ID, ensuring it belongs to ``current_user``."""
     q = select(Run).where(Run.id == run_id, Run.user_id == current_user.id)
+    opts = []
     if load_steps:
-        q = q.options(selectinload(Run.agent_steps))
+        opts.append(selectinload(Run.agent_steps))
     if load_diffs:
-        q = q.options(selectinload(Run.diffs))
+        opts.append(selectinload(Run.diffs))
+    if opts:
+        q = q.options(*opts)
     result = await db.execute(q)
     run = result.scalar_one_or_none()
     if run is None:
@@ -141,7 +150,9 @@ async def get_run(
     The ``review`` field is populated when the Reviewer node has completed
     (i.e. when a ``reviewer`` AgentStep exists for this run).
     """
-    run = await _get_run_or_404(run_id, current_user, db, load_steps=True)
+    run = await _get_run_or_404(
+        run_id, current_user, db, load_steps=True, load_diffs=True
+    )
     detail = RunDetail.model_validate(run)
     for step in reversed(run.agent_steps):
         if step.agent == AgentRole.reviewer:

@@ -65,9 +65,17 @@ export interface RunOut {
   rejection_reason: string | null;
 }
 
+export interface DiffOut {
+  id: string;
+  file_path: string;
+  patch: string;
+  approved: boolean;
+}
+
 export interface RunDetail extends RunOut {
   agent_steps: AgentStepOut[];
   review: ReviewOut | null;
+  diffs: DiffOut[];
 }
 
 export interface HealthResponse {

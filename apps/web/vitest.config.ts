@@ -10,6 +10,7 @@ export default defineConfig({
     globals: true,
     include: ["**/*.test.{ts,tsx}"],
     exclude: ["node_modules", ".next"],
+    pool: "vmThreads",
   },
   resolve: {
     alias: {
