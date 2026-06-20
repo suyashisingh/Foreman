@@ -22,6 +22,7 @@ import uuid
 from typing import Any
 
 from e2b import AsyncSandbox
+from e2b.sandbox_async.commands.command_handle import CommandExitException
 
 from app.agents.state import AgentState
 from app.db import session as _db_session
@@ -68,20 +69,56 @@ async def tester_node(state: AgentState) -> dict[str, Any]:
         run.status = RunStatus.testing
         await db.commit()
 
-    # --- Ensure pytest is available (best-effort) ---------------------------
-    await sandbox.commands.run("pip install pytest -q", timeout=60)
+    # --- Ensure pytest and the repo's own package are available (best-effort) -
+    # Wrapping in try/except: a transient sandbox error here must not kill the
+    # run before we can record a TestAttempt — we still want to try pytest.
+    try:
+        await sandbox.commands.run("pip install pytest -q", timeout=60)
+    except Exception:
+        logger.warning("pip install pytest raised — continuing", extra={"run_id": str(run_id)})
+    try:
+        # Install the repo's own package so test-suite imports resolve.
+        await sandbox.commands.run(
+            f"pip install -e {_REPO_DIR} -q", timeout=90,
+        )
+    except Exception:
+        logger.warning("pip install -e repo raised — continuing", extra={"run_id": str(run_id)})
 
     # --- Run pytest ---------------------------------------------------------
+    # e2b raises CommandExitException for non-zero exit codes (e.g. failing
+    # tests) and a generic Exception for transient sandbox/network errors.
     t_start = time.perf_counter()
-    result = await sandbox.commands.run(
-        f"python -m pytest {_REPO_DIR} --tb=short -q",
-        timeout=120,
-    )
+    exit_code: int = -1
+    stdout: str = ""
+    stderr: str = ""
+    passed: bool = False
+    try:
+        result = await sandbox.commands.run(
+            "python -m pytest --tb=short -q",
+            cwd=_REPO_DIR,
+            timeout=180,
+        )
+        exit_code = result.exit_code
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        passed = exit_code == 0
+    except CommandExitException as exc:
+        # pytest itself ran but exited non-zero — the exception carries output.
+        exit_code = exc.exit_code
+        stdout = exc.stdout or ""
+        stderr = exc.stderr or ""
+        passed = False
+    except Exception as exc:
+        # Transient sandbox/network error — treat as failure so retry fires.
+        exit_code = -1
+        stderr = f"sandbox error: {exc}"
+        logger.error(
+            "sandbox.commands.run raised during pytest",
+            exc_info=True,
+            extra={"run_id": str(run_id)},
+        )
     duration_ms = int((time.perf_counter() - t_start) * 1000)
 
-    passed = result.exit_code == 0
-    stdout = result.stdout or ""
-    stderr = result.stderr or ""
     test_output = stdout + (f"\n{stderr}" if stderr.strip() else "")
 
     attempt_number = retry_count + 1
@@ -93,7 +130,7 @@ async def tester_node(state: AgentState) -> dict[str, Any]:
             "run_id": str(run_id),
             "attempt_number": attempt_number,
             "passed": passed,
-            "exit_code": result.exit_code,
+            "exit_code": exit_code,
             "duration_ms": duration_ms,
         },
     )
@@ -122,7 +159,7 @@ async def tester_node(state: AgentState) -> dict[str, Any]:
             },
             output_data={
                 "passed": passed,
-                "exit_code": result.exit_code,
+                "exit_code": exit_code,
                 "stdout_len": len(stdout),
                 "stderr_len": len(stderr),
             },

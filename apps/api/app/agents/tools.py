@@ -17,10 +17,13 @@ which tool to call — keep them precise and action-oriented.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from e2b import AsyncSandbox
 from google.genai import types as genai_types
+
+_TOOL_TIMEOUT = 30  # seconds per individual sandbox file/command operation
 
 # ---------------------------------------------------------------------------
 # Tool definitions (FunctionDeclarations sent to Gemini)
@@ -120,7 +123,9 @@ async def execute_tool(
     if name == "read_file":
         path: str = args.get("path", "")
         try:
-            content = await sandbox.files.read(path)
+            content = await asyncio.wait_for(
+                sandbox.files.read(path), timeout=_TOOL_TIMEOUT
+            )
             return {"content": content}
         except Exception as exc:
             return {"error": str(exc)}
@@ -129,11 +134,12 @@ async def execute_tool(
         path = args.get("path", "")
         content_str: str = args.get("content", "")
         try:
-            # Ensure parent directories exist
             parent = "/".join(path.split("/")[:-1])
             if parent:
                 await sandbox.commands.run(f"mkdir -p {parent}", timeout=10)
-            await sandbox.files.write(path, content_str)
+            await asyncio.wait_for(
+                sandbox.files.write(path, content_str), timeout=_TOOL_TIMEOUT
+            )
             return {"success": True}
         except Exception as exc:
             return {"error": str(exc)}
@@ -141,7 +147,9 @@ async def execute_tool(
     if name == "list_files":
         directory: str = args.get("directory", "")
         try:
-            entries = await sandbox.files.list(directory)
+            entries = await asyncio.wait_for(
+                sandbox.files.list(directory), timeout=_TOOL_TIMEOUT
+            )
             return {
                 "entries": [
                     {

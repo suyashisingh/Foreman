@@ -208,7 +208,7 @@ async def execute_run(ctx: dict, run_id: str) -> None:
         # Create a single sandbox shared across the entire Coder↔Tester loop.
         sandbox = await AsyncSandbox.create(
             api_key=settings.E2B_API_KEY,
-            timeout=600,  # 10 min — generous for multi-retry runs
+            timeout=1800,  # 30 min — covers multi-retry runs with slow models
         )
 
         async with session_factory() as db:
@@ -273,7 +273,9 @@ async def execute_run(ctx: dict, run_id: str) -> None:
 
     except Exception as exc:
         logger.error(
-            "execute_run failed",
+            "execute_run failed: %s",
+            exc,
+            exc_info=True,
             extra={"run_id": run_id, "error": str(exc)},
         )
         async with session_factory() as db:

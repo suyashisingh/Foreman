@@ -30,6 +30,7 @@ Returns a partial ``AgentState`` dict with ``diffs``, ``retry_count``, and
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -134,6 +135,45 @@ def _parse_diff(raw_diff: str) -> list[dict[str, str]]:
 # ---------------------------------------------------------------------------
 
 
+_GEMINI_CALL_TIMEOUT = 120  # seconds per Gemini generate_content call
+
+
+async def _generate_with_retry(
+    client: genai.Client,
+    model: str,
+    contents: Any,
+    config: genai_types.GenerateContentConfig,
+    max_retries: int = 3,
+) -> Any:
+    """Call generate_content with backoff on transient 503 errors and a hard timeout."""
+    for attempt in range(max_retries + 1):
+        try:
+            return await asyncio.wait_for(
+                client.aio.models.generate_content(
+                    model=model,
+                    contents=contents,  # type: ignore[arg-type]
+                    config=config,
+                ),
+                timeout=_GEMINI_CALL_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            if attempt == max_retries:
+                raise RuntimeError(
+                    f"Gemini call timed out after {_GEMINI_CALL_TIMEOUT}s "
+                    f"(attempt {attempt + 1}/{max_retries + 1})"
+                )
+            logger.warning(
+                "Coder: Gemini call timed out, retrying (attempt %d)", attempt + 1
+            )
+        except Exception as exc:
+            if attempt == max_retries or "503" not in str(exc):
+                raise
+            wait = 2 ** (attempt + 1)  # 2, 4, 8 s
+            logger.warning("Coder: 503 from Gemini, retrying in %ds", wait)
+            await asyncio.sleep(wait)
+    raise AssertionError("unreachable")
+
+
 async def coder_node(state: AgentState) -> dict[str, Any]:
     """LangGraph node: implement the Planner's plan in the shared e2b sandbox.
 
@@ -216,9 +256,10 @@ async def coder_node(state: AgentState) -> dict[str, Any]:
     config = genai_types.GenerateContentConfig(tools=CODER_TOOLS)
 
     for iteration in range(settings.MAX_CODER_TOOL_ITERATIONS):
-        response = await client.aio.models.generate_content(
+        response = await _generate_with_retry(
+            client=client,
             model=settings.GEMINI_MODEL,
-            contents=contents,  # type: ignore[arg-type]
+            contents=contents,
             config=config,
         )
 

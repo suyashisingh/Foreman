@@ -42,13 +42,22 @@ def _make_sandbox_mock(
     stdout: str = "1 passed",
     stderr: str = "",
 ) -> AsyncMock:
-    """Build a mocked sandbox whose commands.run returns the given pytest result."""
+    """Build a mocked sandbox whose commands.run mirrors real e2b behaviour.
+
+    The real e2b SDK raises CommandExitException for non-zero exit codes and
+    returns a CommandResult object when exit_code == 0.
+    """
     from e2b import CommandResult
+    from e2b.sandbox_async.commands.command_handle import CommandExitException
 
     sandbox = AsyncMock()
     sandbox.sandbox_id = "tester-sandbox-xyz"
 
     def _run_side_effect(cmd: str, timeout: float | None = None, **kwargs: Any) -> Any:
+        if exit_code != 0:
+            raise CommandExitException(
+                stderr=stderr, stdout=stdout, exit_code=exit_code, error=None
+            )
         r = MagicMock(spec=CommandResult)
         r.stdout = stdout
         r.stderr = stderr
