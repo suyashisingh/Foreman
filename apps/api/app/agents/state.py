@@ -41,10 +41,20 @@ class AgentState(_AgentStateRequired, total=False):
     current_agent
         Name of the node that most recently updated state (e.g. "planner").
     retry_count
-        How many times the current node has retried — used by the Coder loop
-        in Part 2 to enforce ``MAX_CODER_RETRIES``.
+        Number of completed Coder retry iterations.  Incremented at the start
+        of each non-first Coder invocation; checked by the post-Tester routing
+        function to decide whether to retry or exhaust.
     error
         Human-readable error message if any node has failed; ``None`` otherwise.
+    sandbox
+        Live ``e2b.AsyncSandbox`` handle, created once in ``execute_run`` and
+        shared across all Coder and Tester invocations in the retry loop.
+    test_passed
+        ``True`` if the last Tester run exited 0; ``False`` otherwise; ``None``
+        before the first Tester invocation.
+    test_output
+        Combined stdout + stderr from the last ``pytest`` run; fed back into
+        the Coder prompt on retry so the model knows what to fix.
     """
 
     retrieved_context: list[dict[str, Any]]
@@ -56,3 +66,14 @@ class AgentState(_AgentStateRequired, total=False):
     current_agent: str
     retry_count: int
     error: str | None
+    # --- Sandbox and test state (Day 4) ------------------------------------
+    # Live e2b AsyncSandbox handle shared across the Coder↔Tester loop.
+    # Created once in execute_run (tasks.py) and killed in its finally block.
+    # Typed as Any because this object is only ever held in memory and never
+    # serialised — the TypedDict contract is for node I/O, not persistence.
+    sandbox: Any
+    # Result of the most recent Tester node execution.
+    test_passed: bool | None
+    # Combined stdout + stderr from the most recent `pytest` run; used to
+    # build the retry-feedback prompt when the Coder runs again.
+    test_output: str | None

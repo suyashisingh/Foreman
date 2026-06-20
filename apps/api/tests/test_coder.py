@@ -5,8 +5,9 @@ Tests cover:
 - The tool-use loop (tool calls executed, results fed back).
 - The MAX_CODER_TOOL_ITERATIONS bound (loop exits gracefully when hit).
 - Per-file diff persistence to the ``diffs`` table.
-- Sandbox cleanup on both success and failure (kill always called in finally).
+- Sandbox NOT killed in coder_node (sandbox lifecycle is tasks.py's job).
 - Each tool function (read_file, write_file, list_files) in isolation.
+- Retry behaviour: prompt includes test failure, git clone skipped, diffs replaced.
 """
 
 from __future__ import annotations
@@ -157,8 +158,13 @@ async def coder_run(db) -> Run:
     return run
 
 
-def _base_state(run: Run) -> AgentState:
-    return AgentState(
+def _base_state(run: Run, sandbox: Any = None, **overrides: Any) -> AgentState:
+    """Build a minimal AgentState for coder tests.
+
+    The sandbox mock is passed in (not created inside coder_node anymore).
+    """
+    sb = sandbox if sandbox is not None else AsyncMock()
+    base: AgentState = AgentState(
         run_id=run.id,
         repo_id=run.repo_id,
         issue_text=run.issue_text,
@@ -177,7 +183,12 @@ def _base_state(run: Run) -> AgentState:
         current_agent="planner",
         retry_count=0,
         error=None,
+        sandbox=sb,
+        test_passed=None,
+        test_output=None,
     )
+    base.update(overrides)  # type: ignore[attr-defined]
+    return base
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +217,19 @@ def test_build_coder_prompt_includes_plan_steps() -> None:
     assert "foo.py" in prompt
     assert "Add bar" in prompt
     assert "Because" in prompt
+
+
+def test_build_coder_prompt_no_retry_section_when_no_test_output() -> None:
+    prompt = _build_coder_prompt("Fix it", {}, "/repo", test_output=None)
+    assert "Previous Attempt Failed" not in prompt
+
+
+def test_build_coder_prompt_retry_section_present_when_test_output_set() -> None:
+    prompt = _build_coder_prompt(
+        "Fix it", {}, "/repo", test_output="FAILED test_foo.py::test_bar"
+    )
+    assert "Previous Attempt Failed" in prompt
+    assert "FAILED test_foo.py::test_bar" in prompt
 
 
 # ---------------------------------------------------------------------------
@@ -372,18 +396,17 @@ async def test_coder_executes_tool_calls(coder_run: Run, session_factory) -> Non
     sandbox.commands.run = AsyncMock(side_effect=_run_side_effect)
 
     with (
-        patch("app.agents.coder.AsyncSandbox") as mock_sb_cls,
         patch("app.agents.coder.genai.Client", return_value=client_mock),
         patch("app.agents.coder._db_session.async_session_factory", session_factory),
     ):
-        mock_sb_cls.create = AsyncMock(return_value=sandbox)
-        result = await coder_node(_base_state(coder_run))
+        result = await coder_node(_base_state(coder_run, sandbox=sandbox))
 
     assert result["current_agent"] == "coder"
     assert isinstance(result["diffs"], list)
     assert len(result["diffs"]) == 1
     assert result["diffs"][0]["file_path"] == "hello.py"
-    sandbox.kill.assert_awaited_once()
+    # Sandbox is NOT killed here — that is tasks.py's responsibility.
+    sandbox.kill.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -396,18 +419,15 @@ async def test_coder_bounded_by_max_iterations(coder_run: Run, session_factory) 
     client_mock = _make_client_mock(*([infinite_fn_call] * 20))
 
     with (
-        patch("app.agents.coder.AsyncSandbox") as mock_sb_cls,
         patch("app.agents.coder.genai.Client", return_value=client_mock),
         patch("app.agents.coder._db_session.async_session_factory", session_factory),
         patch("app.agents.coder.settings.MAX_CODER_TOOL_ITERATIONS", 3),
     ):
-        mock_sb_cls.create = AsyncMock(return_value=sandbox)
-        result = await coder_node(_base_state(coder_run))
+        result = await coder_node(_base_state(coder_run, sandbox=sandbox))
 
-    # Should complete (not raise), with exactly 3 generate_content calls.
     assert result["current_agent"] == "coder"
     assert client_mock.aio.models.generate_content.await_count == 3
-    sandbox.kill.assert_awaited_once()
+    sandbox.kill.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -440,12 +460,10 @@ async def test_coder_persists_diffs_to_db(coder_run: Run, session_factory, db) -
     client_mock = _make_client_mock(_make_text_response("Done."))
 
     with (
-        patch("app.agents.coder.AsyncSandbox") as mock_sb_cls,
         patch("app.agents.coder.genai.Client", return_value=client_mock),
         patch("app.agents.coder._db_session.async_session_factory", session_factory),
     ):
-        mock_sb_cls.create = AsyncMock(return_value=sandbox)
-        await coder_node(_base_state(coder_run))
+        await coder_node(_base_state(coder_run, sandbox=sandbox))
 
     diffs = (
         (await db.execute(select(Diff).where(Diff.run_id == coder_run.id)))
@@ -467,12 +485,10 @@ async def test_coder_logs_agent_step(coder_run: Run, session_factory, db) -> Non
     client_mock = _make_client_mock(_make_text_response("Done."))
 
     with (
-        patch("app.agents.coder.AsyncSandbox") as mock_sb_cls,
         patch("app.agents.coder.genai.Client", return_value=client_mock),
         patch("app.agents.coder._db_session.async_session_factory", session_factory),
     ):
-        mock_sb_cls.create = AsyncMock(return_value=sandbox)
-        await coder_node(_base_state(coder_run))
+        await coder_node(_base_state(coder_run, sandbox=sandbox))
 
     steps = (
         (
@@ -496,10 +512,10 @@ async def test_coder_logs_agent_step(coder_run: Run, session_factory, db) -> Non
 
 
 @pytest.mark.asyncio
-async def test_coder_sandbox_killed_on_clone_failure(
+async def test_coder_clone_failure_raises_without_sandbox_kill(
     coder_run: Run, session_factory
 ) -> None:
-    """sandbox.kill() is called in the finally block even when git clone fails."""
+    """git clone failure raises RuntimeError; sandbox.kill is NOT called here."""
     sandbox = _make_sandbox_mock()
 
     from e2b import CommandResult
@@ -516,16 +532,14 @@ async def test_coder_sandbox_killed_on_clone_failure(
     client_mock = MagicMock()
 
     with (
-        patch("app.agents.coder.AsyncSandbox") as mock_sb_cls,
         patch("app.agents.coder.genai.Client", return_value=client_mock),
         patch("app.agents.coder._db_session.async_session_factory", session_factory),
     ):
-        mock_sb_cls.create = AsyncMock(return_value=sandbox)
         with pytest.raises(RuntimeError, match="git clone failed"):
-            await coder_node(_base_state(coder_run))
+            await coder_node(_base_state(coder_run, sandbox=sandbox))
 
-    # Kill must have been called despite the error.
-    sandbox.kill.assert_awaited_once()
+    # Sandbox lifecycle is tasks.py's responsibility — never killed in coder_node.
+    sandbox.kill.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -534,7 +548,6 @@ async def test_coder_sets_run_status_to_coding(
 ) -> None:
     """coder_node transitions run.status to coding at the start of execution."""
     sandbox = _make_sandbox_mock()
-    # Fail after setting status so we can catch the status update.
     from e2b import CommandResult
 
     def _fail(cmd: str, timeout: float | None = None, **kwargs: Any) -> Any:
@@ -549,16 +562,13 @@ async def test_coder_sets_run_status_to_coding(
     client_mock = MagicMock()
 
     with (
-        patch("app.agents.coder.AsyncSandbox") as mock_sb_cls,
         patch("app.agents.coder.genai.Client", return_value=client_mock),
         patch("app.agents.coder._db_session.async_session_factory", session_factory),
     ):
-        mock_sb_cls.create = AsyncMock(return_value=sandbox)
         with pytest.raises(RuntimeError):
-            await coder_node(_base_state(coder_run))
+            await coder_node(_base_state(coder_run, sandbox=sandbox))
 
     await db.refresh(coder_run)
-    # Status was set to coding before the clone attempt.
     assert coder_run.status == RunStatus.coding
 
 
@@ -567,16 +577,14 @@ async def test_coder_no_changes_produces_empty_diffs(
     coder_run: Run, session_factory, db
 ) -> None:
     """Empty git diff produces empty diffs list and no Diff rows in the DB."""
-    sandbox = _make_sandbox_mock()  # default: commands.run returns empty stdout
+    sandbox = _make_sandbox_mock()
     client_mock = _make_client_mock(_make_text_response("Nothing to change."))
 
     with (
-        patch("app.agents.coder.AsyncSandbox") as mock_sb_cls,
         patch("app.agents.coder.genai.Client", return_value=client_mock),
         patch("app.agents.coder._db_session.async_session_factory", session_factory),
     ):
-        mock_sb_cls.create = AsyncMock(return_value=sandbox)
-        result = await coder_node(_base_state(coder_run))
+        result = await coder_node(_base_state(coder_run, sandbox=sandbox))
 
     assert result["diffs"] == []
 
@@ -586,3 +594,184 @@ async def test_coder_no_changes_produces_empty_diffs(
         .all()
     )
     assert diff_count == 0
+
+
+# ---------------------------------------------------------------------------
+# Retry-specific tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_coder_retry_skips_git_clone(coder_run: Run, session_factory) -> None:
+    """On retry (test_output set), coder_node does NOT run git clone."""
+    sandbox = _make_sandbox_mock()
+    client_mock = _make_client_mock(_make_text_response("Fixed."))
+    clone_calls: list[str] = []
+
+    from e2b import CommandResult
+
+    def _run_side_effect(cmd: str, timeout: float | None = None, **kwargs: Any) -> Any:
+        r = MagicMock(spec=CommandResult)
+        r.stdout = ""
+        r.stderr = ""
+        r.exit_code = 0
+        r.error = None
+        if "git clone" in cmd:
+            clone_calls.append(cmd)
+        return r
+
+    sandbox.commands.run = AsyncMock(side_effect=_run_side_effect)
+
+    with (
+        patch("app.agents.coder.genai.Client", return_value=client_mock),
+        patch("app.agents.coder._db_session.async_session_factory", session_factory),
+    ):
+        await coder_node(
+            _base_state(
+                coder_run,
+                sandbox=sandbox,
+                retry_count=0,
+                test_output="FAILED test_foo.py::test_bar\n1 failed",
+            )
+        )
+
+    assert clone_calls == [], "git clone must not run on retry"
+
+
+@pytest.mark.asyncio
+async def test_coder_retry_prompt_contains_test_output(
+    coder_run: Run, session_factory
+) -> None:
+    """On retry, the prompt sent to Gemini contains the previous test failure."""
+    sandbox = _make_sandbox_mock()
+    captured_prompts: list[str] = []
+
+    def _capture_content(model: str, contents: Any, config: Any = None) -> MagicMock:
+        # contents[0] is the user message; extract text from its first part.
+        try:
+            captured_prompts.append(contents[0].parts[0].text)
+        except Exception:
+            pass
+        return _make_text_response("ok")
+
+    client = MagicMock()
+    client.aio.models.generate_content = AsyncMock(side_effect=_capture_content)
+
+    with (
+        patch("app.agents.coder.genai.Client", return_value=client),
+        patch("app.agents.coder._db_session.async_session_factory", session_factory),
+    ):
+        await coder_node(
+            _base_state(
+                coder_run,
+                sandbox=sandbox,
+                retry_count=0,
+                test_output="AssertionError: 1 != 2",
+            )
+        )
+
+    assert captured_prompts, "generate_content was never called"
+    assert "Previous Attempt Failed" in captured_prompts[0]
+    assert "AssertionError: 1 != 2" in captured_prompts[0]
+
+
+@pytest.mark.asyncio
+async def test_coder_increments_retry_count(coder_run: Run, session_factory) -> None:
+    """retry_count in the returned state is incremented by 1 on each retry."""
+    sandbox = _make_sandbox_mock()
+    # Use return_value (not side_effect list) so the same response repeats.
+    client = MagicMock()
+    client.aio.models.generate_content = AsyncMock(
+        return_value=_make_text_response("Done.")
+    )
+
+    with (
+        patch("app.agents.coder.genai.Client", return_value=client),
+        patch("app.agents.coder._db_session.async_session_factory", session_factory),
+    ):
+        # First invocation — not a retry
+        result_first = await coder_node(
+            _base_state(coder_run, sandbox=sandbox, retry_count=0, test_output=None)
+        )
+        assert result_first["retry_count"] == 0
+
+        # Second invocation — first retry
+        result_retry = await coder_node(
+            _base_state(
+                coder_run,
+                sandbox=sandbox,
+                retry_count=0,
+                test_output="1 failed",
+            )
+        )
+        assert result_retry["retry_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_coder_retry_replaces_old_diffs(
+    coder_run: Run, session_factory, db
+) -> None:
+    """On retry, prior-attempt Diff rows are deleted before new ones are inserted."""
+    sandbox = _make_sandbox_mock()
+    client_mock = _make_client_mock(_make_text_response("Done."))
+
+    # Seed an existing Diff row to simulate a prior attempt.
+    from app.db.models import Diff as DiffModel
+
+    async with session_factory() as seed_db:
+        seed_db.add(
+            DiffModel(
+                run_id=coder_run.id,
+                file_path="old_file.py",
+                patch="--- a/old\n+++ b/old\n",
+                approved=False,
+            )
+        )
+        await seed_db.commit()
+
+    from e2b import CommandResult
+
+    def _run_side_effect(cmd: str, timeout: float | None = None, **kwargs: Any) -> Any:
+        r = MagicMock(spec=CommandResult)
+        r.error = None
+        if cmd.strip().endswith(" diff"):
+            r.stdout = (
+                "diff --git a/new_file.py b/new_file.py\n"
+                "index 000..111 100644\n"
+                "--- a/new_file.py\n"
+                "+++ b/new_file.py\n"
+                "@@ -1 +1,2 @@\n"
+                " pass\n"
+                "+# fix\n"
+            )
+        else:
+            r.stdout = ""
+        r.stderr = ""
+        r.exit_code = 0
+        return r
+
+    sandbox.commands.run = AsyncMock(side_effect=_run_side_effect)
+
+    with (
+        patch("app.agents.coder.genai.Client", return_value=client_mock),
+        patch("app.agents.coder._db_session.async_session_factory", session_factory),
+    ):
+        await coder_node(
+            _base_state(
+                coder_run,
+                sandbox=sandbox,
+                retry_count=0,
+                test_output="1 failed",
+            )
+        )
+
+    diffs = (
+        (await db.execute(select(Diff).where(Diff.run_id == coder_run.id)))
+        .scalars()
+        .all()
+    )
+
+    # old_file.py must be gone; only new_file.py remains.
+    file_paths = [d.file_path for d in diffs]
+    assert "old_file.py" not in file_paths
+    assert "new_file.py" in file_paths

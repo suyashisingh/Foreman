@@ -186,43 +186,70 @@ provider requires only a new subclass in that file — no node logic changes.
 
 Currently implemented: **Gemini** (`LLM_PROVIDER=gemini`) via the `google-genai` SDK.
 
-#### Agent graph: Planner → Coder → END
+#### Agent graph: Planner → Coder ↔ Tester retry loop
 
 ```
-pending → planning → coding → awaiting_approval
-                            ↘ failed  (on any error)
+pending → planning → coding → testing → awaiting_approval
+                     ↑    ↘ (retry)       ↘ failed  (retries exhausted or error)
+                     └──────────────────────┘
 ```
 
 **Planner** (step 0): retrieves the top-8 most relevant code chunks via pgvector
 cosine search and calls Gemini with `response_schema=Plan` to produce a structured
 implementation plan (list of `{file_path, action, description}` steps).
 
-**Coder** (step 1): opens a fresh [e2b](https://e2b.dev) sandbox, shallow-clones the
-target repo into it, then runs a **bounded tool-use loop**:
+**Sandbox lifecycle**: a single [e2b](https://e2b.dev) sandbox is created **once**
+in `execute_run` (tasks.py) before the graph starts and is killed in its `finally`
+block after the graph completes — regardless of whether the run passes, fails, or
+raises an exception.  This shared sandbox lets the Tester see the exact filesystem
+state that the Coder left, and lets retries continue editing the same clone rather
+than starting from scratch.
 
-1. Sends the Plan + issue text to Gemini with three tools available:
-   `read_file`, `write_file`, `list_files`.
-2. Executes each tool call against the real sandbox filesystem.
-3. Feeds results back as `FunctionResponse` content.
+**Coder** (odd steps: 1, 3, 5 …): uses the shared sandbox to implement the plan.
+
+*First invocation:*
+1. Shallow-clones the target repo into `/home/user/repo`.
+2. Sends the Plan + issue text to Gemini with three tools: `read_file`,
+   `write_file`, `list_files`.
+3. Executes each tool call against the real sandbox filesystem.
 4. Repeats until the model stops calling tools **or** `MAX_CODER_TOOL_ITERATIONS`
    is reached (default 15) — graceful stop, never a hard crash.
 5. Runs `git diff` to capture a unified diff of all changes.
-6. Persists one `Diff` row per changed file (`approved=False`) and logs the
-   `AgentStep` with cumulative token usage across all loop turns.
-7. Always kills the sandbox in a `finally` block.
+6. Persists one `Diff` row per changed file (`approved=False`).
 
-After the Coder completes, the run transitions to `awaiting_approval` — a human
-(or future automated Reviewer node) can inspect the raw diffs.
+*Retry invocations:* skips the git clone (repo is already in the sandbox with
+the previous edits in place).  The prompt includes the pytest failure output
+from the previous Tester run so the model knows exactly what to fix.  Old `Diff`
+rows are deleted and replaced with the cumulative diff.
 
-**Tester** and **Reviewer** nodes are planned for Day 4 and will slot in between
-Coder and END without requiring changes to existing nodes.
+**Tester** (even steps: 2, 4, 6 …): runs the repository's test suite.
 
-New env vars introduced by the Coder:
+1. Sets `run.status = testing`.
+2. Runs `pip install pytest -q` (best-effort) then
+   `python -m pytest /home/user/repo --tb=short -q`.
+3. `exit_code == 0` → `test_passed = True`; any non-zero exit → `test_passed = False`.
+4. Persists a `TestAttempt` row (attempt_number, passed, stdout, stderr, duration_ms).
+5. Logs an `AgentStep` row for telemetry.
+6. Returns `test_passed` and `test_output` (stdout + stderr) to the graph.
+
+**Routing after Tester:**
+
+| Condition | Next step |
+|---|---|
+| `test_passed = True` | END → `awaiting_approval` |
+| `test_passed = False` AND `retry_count < MAX_CODER_RETRIES` | Coder (retry) |
+| `test_passed = False` AND retries exhausted | END → `failed` |
+
+`MAX_CODER_RETRIES = 2` (default) means up to 2 Coder retries (3 total Coder
+invocations) before the run is marked `failed`.
+
+New env vars:
 
 | Variable | Default | Description |
 |---|---|---|
 | `E2B_API_KEY` | *(required)* | e2b sandbox key — get one at e2b.dev |
-| `MAX_CODER_TOOL_ITERATIONS` | `15` | Max tool-call iterations per Coder run |
+| `MAX_CODER_RETRIES` | `2` | Max Coder↔Tester retry iterations |
+| `MAX_CODER_TOOL_ITERATIONS` | `15` | Max tool-call iterations within one Coder run |
 
 ---
 

@@ -11,9 +11,13 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
+from e2b import AsyncSandbox
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.agents.state import AgentState
+from app.core.config import settings
 from app.db.models import Repo, RepoChunk, RepoStatus, Run, RunStatus
+from app.orchestrator.graph import build_graph
 from app.retrieval.chunking import chunk_repo
 from app.retrieval.cloning import CloneError, clone_repo, remove_clone
 from app.retrieval.embeddings import EmbeddingError, embed_texts
@@ -172,19 +176,18 @@ async def execute_run(ctx: dict, run_id: str) -> None:
 
     Status transitions committed to the DB as execution progresses:
 
-        pending → planning → awaiting_approval
-                           ↘ failed (on any error)
+        pending → planning → coding → testing → awaiting_approval
+                                              ↘ failed (retries exhausted or error)
 
-    The graph itself (build_graph) creates its own DB sessions per node.
-    This task only owns the status bookkeeping around the graph call.
+    The sandbox is created here, before the graph starts, so it can be shared
+    across every Coder and Tester invocation in the Coder↔Tester retry loop.
+    It is always killed in the ``finally`` block — even when an exception
+    propagates — to avoid leaking billable sandbox time.
 
     Args:
         ctx:    ARQ worker context.  Must contain ``"session_factory"``.
         run_id: String representation of the ``Run.id`` UUID to execute.
     """
-    from app.agents.state import AgentState
-    from app.orchestrator.graph import build_graph
-
     session_factory: async_sessionmaker[AsyncSession] = ctx["session_factory"]
     rid = uuid.UUID(run_id)
 
@@ -200,7 +203,20 @@ async def execute_run(ctx: dict, run_id: str) -> None:
         repo_id: uuid.UUID = run.repo_id
         issue_text: str = run.issue_text
 
+    sandbox: AsyncSandbox | None = None
     try:
+        # Create a single sandbox shared across the entire Coder↔Tester loop.
+        sandbox = await AsyncSandbox.create(
+            api_key=settings.E2B_API_KEY,
+            timeout=600,  # 10 min — generous for multi-retry runs
+        )
+
+        async with session_factory() as db:
+            run = await db.get(Run, rid)
+            if run is not None:
+                run.sandbox_id = sandbox.sandbox_id
+                await db.commit()
+
         graph = build_graph()
         initial_state: AgentState = {
             "run_id": rid,
@@ -212,15 +228,35 @@ async def execute_run(ctx: dict, run_id: str) -> None:
             "current_agent": "",
             "retry_count": 0,
             "error": None,
+            "sandbox": sandbox,
+            "test_passed": None,
+            "test_output": None,
         }
         final_state = await graph.ainvoke(initial_state)
 
-        async with session_factory() as db:
-            run = await db.get(Run, rid)
-            if run is not None:
-                run.status = RunStatus.awaiting_approval
-                run.completed_at = datetime.now(timezone.utc)
-                await db.commit()
+        # Determine final status from Tester outcome.
+        if final_state.get("test_passed") is False:
+            # Retries exhausted — tests still failing after all attempts.
+            retry_count = final_state.get("retry_count") or 0
+            test_output = final_state.get("test_output") or ""
+            word = "retry" if retry_count == 1 else "retries"
+            error_msg = (
+                f"Tests failed after {retry_count} {word}. "
+                f"Last pytest output:\n{test_output[:1000]}"
+            )
+            async with session_factory() as db:
+                run = await db.get(Run, rid)
+                if run is not None:
+                    await _set_run_failed(db, run, error_msg)
+        else:
+            # test_passed=True (tests green) or None (tester didn't run — treated
+            # as success for backward compatibility with any future graph variants).
+            async with session_factory() as db:
+                run = await db.get(Run, rid)
+                if run is not None:
+                    run.status = RunStatus.awaiting_approval
+                    run.completed_at = datetime.now(timezone.utc)
+                    await db.commit()
 
         plan = final_state.get("plan") or {}
         diffs = final_state.get("diffs") or []
@@ -230,6 +266,8 @@ async def execute_run(ctx: dict, run_id: str) -> None:
                 "run_id": run_id,
                 "plan_steps": len(plan.get("steps", [])),
                 "diff_count": len(diffs),
+                "test_passed": final_state.get("test_passed"),
+                "retry_count": final_state.get("retry_count"),
             },
         )
 
@@ -242,3 +280,13 @@ async def execute_run(ctx: dict, run_id: str) -> None:
             run = await db.get(Run, rid)
             if run is not None:
                 await _set_run_failed(db, run, str(exc))
+
+    finally:
+        if sandbox is not None:
+            try:
+                await sandbox.kill()
+            except Exception:
+                logger.warning(
+                    "execute_run: failed to kill sandbox — may have already exited",
+                    extra={"run_id": run_id},
+                )
