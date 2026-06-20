@@ -128,9 +128,9 @@ export class RunWsClient {
       const { type, data, timestamp } = envelope;
 
       if (type === "agent_step") {
-        this.opts.onAgentStep?.(data as WsAgentStepData, timestamp);
+        this.opts.onAgentStep?.(data as unknown as WsAgentStepData, timestamp);
       } else if (type === "status_change") {
-        const d = data as WsStatusChangeData;
+        const d = data as unknown as WsStatusChangeData;
         this.opts.onStatusChange?.(d, timestamp);
         // Backend closes after forwarding a terminal status_change, so we
         // track here to suppress reconnect on the subsequent onclose.
@@ -138,7 +138,7 @@ export class RunWsClient {
           this.terminated = true;
         }
       } else if (type === "run_complete") {
-        const d = data as WsRunCompleteData;
+        const d = data as unknown as WsRunCompleteData;
         this.opts.onRunComplete?.(d, timestamp);
         this.terminated = true;
       }
