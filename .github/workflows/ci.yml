@@ -33,10 +33,21 @@ jobs:
           --health-retries 5
           --health-start-period 5s
 
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     # Both alembic and pytest read these from the environment.
     # JWT_SECRET_KEY, VOYAGE_API_KEY, and GEMINI_API_KEY have no defaults — values must be present.
     env:
       DATABASE_URL: postgresql+asyncpg://foreman:foreman_secret@localhost:5432/foreman_test
+      REDIS_URL: redis://localhost:6379
       JWT_SECRET_KEY: ci-only-dummy-secret-key-not-used-in-production-0000
       VOYAGE_API_KEY: ci-only-dummy-voyage-key-not-used-in-production-0000
       GEMINI_API_KEY: ci-only-dummy-gemini-key-not-used-in-production-0000
