@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { login, register, listRepos, createRun, ApiError } from "@/lib/api-client";
+import { login, register, listRepos, createRun, registerRepo, ApiError } from "@/lib/api-client";
 
 const mockFetch = vi.fn();
 
@@ -25,6 +25,19 @@ function mockError(status: number, detail: string) {
     statusText: "Error",
     json: () => Promise.resolve({ detail }),
     text: () => Promise.resolve(detail),
+  });
+}
+
+function mockValidationError(
+  status: number,
+  errors: { type: string; loc: string[]; msg: string; input?: unknown }[],
+) {
+  mockFetch.mockResolvedValueOnce({
+    ok: false,
+    status,
+    statusText: "Unprocessable Entity",
+    json: () => Promise.resolve({ detail: errors }),
+    text: () => Promise.resolve(JSON.stringify({ detail: errors })),
   });
 }
 
@@ -91,6 +104,69 @@ describe("listRepos", () => {
         }),
       }),
     );
+  });
+});
+
+describe("ApiError — FastAPI 422 array-format detail", () => {
+  it("converts a single validation error to a readable string", async () => {
+    mockValidationError(422, [
+      { type: "missing", loc: ["body", "clone_url"], msg: "Field required", input: {} },
+    ]);
+    try {
+      await registerRepo("tok", { name: "x", clone_url: "" });
+    } catch (err) {
+      expect(err).toBeInstanceOf(ApiError);
+      if (err instanceof ApiError) {
+        expect(err.status).toBe(422);
+        // Must be a plain string, not an array
+        expect(typeof err.detail).toBe("string");
+        expect(err.detail).toContain("clone_url");
+        expect(err.detail).toContain("Field required");
+      }
+    }
+  });
+
+  it("joins multiple validation errors with semicolons", async () => {
+    mockValidationError(422, [
+      { type: "missing", loc: ["body", "name"], msg: "Field required", input: {} },
+      { type: "missing", loc: ["body", "clone_url"], msg: "Field required", input: {} },
+    ]);
+    try {
+      await registerRepo("tok", { name: "", clone_url: "" });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        expect(typeof err.detail).toBe("string");
+        expect(err.detail).toContain("name");
+        expect(err.detail).toContain("clone_url");
+        // Both errors joined
+        expect(err.detail.split(";").length).toBe(2);
+      }
+    }
+  });
+
+  it("keeps a plain string detail unchanged", async () => {
+    mockError(409, "A user with this email already exists.");
+    try {
+      await register("dup@test.com", "password");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        expect(err.detail).toBe("A user with this email already exists.");
+      }
+    }
+  });
+
+  it("detail is always a string — never an array", async () => {
+    mockValidationError(422, [
+      { type: "missing", loc: ["body", "clone_url"], msg: "Field required" },
+    ]);
+    try {
+      await registerRepo("tok", { name: "x", clone_url: "" });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        expect(Array.isArray(err.detail)).toBe(false);
+        expect(typeof err.detail).toBe("string");
+      }
+    }
   });
 });
 

@@ -154,6 +154,35 @@ async def test_get_repo_detail_works_for_pending(auth_client, mock_arq_pool):
 
 
 @pytest.mark.asyncio
+async def test_post_repos_only_name_and_clone_url_defaults_branch(
+    auth_client, mock_arq_pool
+):
+    """POST /repos with only name + clone_url (no default_branch) returns 202
+    and the created repo's default_branch is 'main'."""
+    resp = await auth_client.post(
+        REPOS_URL,
+        json={"name": "iniconfig", "clone_url": "https://github.com/pytest-dev/iniconfig.git"},
+    )
+    assert resp.status_code == 202, resp.text
+    body = resp.json()
+    assert body["name"] == "iniconfig"
+    assert body["clone_url"] == "https://github.com/pytest-dev/iniconfig.git"
+    assert body["default_branch"] == "main"
+    assert body["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_post_repos_rejects_missing_clone_url(auth_client, mock_arq_pool):
+    """POST /repos without clone_url returns 422 (FastAPI validation error)."""
+    resp = await auth_client.post(REPOS_URL, json={"name": "missing-url"})
+    assert resp.status_code == 422
+    body = resp.json()
+    # FastAPI returns detail as a list of validation error objects
+    assert isinstance(body["detail"], list)
+    assert any(e["loc"][-1] == "clone_url" for e in body["detail"])
+
+
+@pytest.mark.asyncio
 async def test_search_requires_ready_status(auth_client, mock_arq_pool):
     """GET /repos/{id}/search returns 422 if the repo is not ready."""
     post_resp = await auth_client.post(
