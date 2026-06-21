@@ -7,6 +7,8 @@ import { AuthGuard } from "@/components/auth-guard";
 import { AgentStepCard } from "@/components/AgentStepCard";
 import { DiffViewer } from "@/components/DiffViewer";
 import { LiveLogStream } from "@/components/LiveLogStream";
+import { StatusBadge } from "@/components/status-badge";
+import { useToast } from "@/components/toast";
 import type { TimelineEntry } from "@/components/LiveLogStream";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,39 +48,7 @@ function shortId(id: string) {
   return id.slice(0, 8);
 }
 
-// ---------------------------------------------------------------------------
-// Status badge
-// ---------------------------------------------------------------------------
-
-const STATUS_STYLE: Record<
-  string,
-  { label: string; cls: string; ring?: string }
-> = {
-  pending: { label: "Pending", cls: "bg-secondary text-secondary-foreground" },
-  planning: { label: "Planning…", cls: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200" },
-  coding: { label: "Coding…", cls: "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200" },
-  testing: { label: "Testing…", cls: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200" },
-  reviewing: { label: "Reviewing…", cls: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200" },
-  awaiting_approval: {
-    label: "Awaiting Approval",
-    cls: "bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-900/30 dark:text-amber-200",
-    ring: "ring-2 ring-amber-300",
-  },
-  passed: { label: "Passed", cls: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200" },
-  failed: { label: "Failed", cls: "bg-destructive/10 text-destructive" },
-  rejected: { label: "Rejected", cls: "bg-destructive/10 text-destructive" },
-};
-
-function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_STYLE[status] ?? { label: status, cls: "bg-secondary text-secondary-foreground" };
-  return (
-    <span
-      className={`inline-block rounded-full px-3 py-0.5 text-sm font-medium ${cfg.cls} ${cfg.ring ?? ""}`}
-    >
-      {cfg.label}
-    </span>
-  );
-}
+// (StatusBadge is now the shared component from @/components/status-badge)
 
 // ---------------------------------------------------------------------------
 // Connection indicator
@@ -143,6 +113,7 @@ function ApprovalPanel({
   onApproved: () => void;
   onRejected: (reason: string) => void;
 }) {
+  const { addToast } = useToast();
   const [action, setAction] = useState<"idle" | "approving" | "rejecting">(
     "idle",
   );
@@ -154,15 +125,17 @@ function ApprovalPanel({
     setError(null);
     try {
       await approveRun(token, runId);
+      addToast("Run approved.", "success");
       onApproved();
     } catch (err) {
-      if (err instanceof ApiError && err.status === 422) {
-        setError(
-          "This run is no longer awaiting approval — it may have already been decided.",
-        );
-      } else {
-        setError(err instanceof ApiError ? err.detail : "Approval failed.");
-      }
+      const msg =
+        err instanceof ApiError && err.status === 422
+          ? "This run is no longer awaiting approval — it may have already been decided."
+          : err instanceof ApiError
+            ? err.detail
+            : "Approval failed.";
+      setError(msg);
+      addToast(msg, "error");
       setAction("idle");
     }
   }
@@ -172,15 +145,17 @@ function ApprovalPanel({
     setError(null);
     try {
       await rejectRun(token, runId, reason || undefined);
+      addToast("Run rejected.", "info");
       onRejected(reason);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 422) {
-        setError(
-          "This run is no longer awaiting approval — it may have already been decided.",
-        );
-      } else {
-        setError(err instanceof ApiError ? err.detail : "Rejection failed.");
-      }
+      const msg =
+        err instanceof ApiError && err.status === 422
+          ? "This run is no longer awaiting approval — it may have already been decided."
+          : err instanceof ApiError
+            ? err.detail
+            : "Rejection failed.";
+      setError(msg);
+      addToast(msg, "error");
       setAction("idle");
     }
   }

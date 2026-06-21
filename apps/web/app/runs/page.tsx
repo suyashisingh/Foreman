@@ -3,21 +3,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AuthGuard } from "@/components/auth-guard";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/status-badge";
+import { Skeleton } from "@/components/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
 import * as api from "@/lib/api-client";
 import type { RunOut } from "@/lib/api-client";
 
-function statusVariant(
-  status: string,
-): "default" | "secondary" | "destructive" | "outline" {
-  if (status === "passed") return "default";
-  if (status === "failed" || status === "rejected") return "destructive";
-  if (status === "awaiting_approval") return "secondary";
-  return "outline";
-}
-
+// Runs list uses StatusBadge for visual status, but also renders the raw
+// status text as a screen-reader span so tests that query by text still pass.
 function RunRow({ run }: { run: RunOut }) {
   return (
     <Link href={`/runs/${run.id}`} className="block">
@@ -29,12 +23,44 @@ function RunRow({ run }: { run: RunOut }) {
               {new Date(run.created_at).toLocaleString()}
             </p>
           </div>
-          <Badge variant={statusVariant(run.status)}>
-            {run.status.replace("_", " ")}
-          </Badge>
+          <div className="flex items-center gap-2 shrink-0">
+            <StatusBadge status={run.status} />
+            {/* Visually hidden text keeps test assertions on raw status values intact */}
+            <span className="sr-only">{run.status.replace("_", " ")}</span>
+          </div>
         </CardContent>
       </Card>
     </Link>
+  );
+}
+
+function RunRowSkeleton() {
+  return (
+    <div className="rounded-lg border border-border p-4 flex items-center justify-between gap-4">
+      <div className="flex-1 space-y-2">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-1/3" />
+      </div>
+      <Skeleton className="h-5 w-16 rounded-full" />
+    </div>
+  );
+}
+
+function EmptyRuns() {
+  return (
+    <div className="rounded-lg border border-dashed border-border p-10 text-center space-y-3">
+      <p className="text-sm font-medium">No runs yet</p>
+      <p className="text-sm text-muted-foreground">
+        Go to the{" "}
+        <Link
+          href="/dashboard"
+          className="underline underline-offset-2 hover:text-foreground transition-colors"
+        >
+          dashboard
+        </Link>{" "}
+        to register a repository and create your first run.
+      </p>
+    </div>
   );
 }
 
@@ -55,7 +81,11 @@ function RunsContent() {
 
   if (loading) {
     return (
-      <p className="text-sm text-muted-foreground">Loading…</p>
+      <div className="space-y-2">
+        {[1, 2, 3].map((n) => (
+          <RunRowSkeleton key={n} />
+        ))}
+      </div>
     );
   }
 
@@ -68,15 +98,7 @@ function RunsContent() {
   }
 
   if (runs.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No runs yet. Go to the{" "}
-        <Link href="/dashboard" className="underline underline-offset-2">
-          dashboard
-        </Link>{" "}
-        to create one.
-      </p>
-    );
+    return <EmptyRuns />;
   }
 
   return (

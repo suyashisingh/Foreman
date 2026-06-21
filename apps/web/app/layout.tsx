@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Link from "next/link";
-import { AuthProvider } from "@/lib/auth-context";
+import { AppShell } from "@/components/app-shell";
 import "./globals.css";
 
+// Typography decision: Geist (clean geometric sans-serif) for all text — body,
+// UI, and headings. Headings use font-bold + tracking-tight for hierarchy.
+// No heavy serifs — the product is a developer tool and should read like one.
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -19,13 +21,6 @@ export const metadata: Metadata = {
   description: "Autonomous multi-agent software engineering platform",
 };
 
-const navLinks = [
-  { href: "/", label: "Home" },
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/login", label: "Login" },
-  { href: "/benchmark", label: "Benchmark" },
-] as const;
-
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -35,27 +30,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <header className="border-b border-border">
-          <nav className="mx-auto max-w-6xl flex items-center gap-6 px-4 py-3">
-            <span className="font-semibold text-lg tracking-tight">
-              Foreman
-            </span>
-            <div className="flex gap-4 text-sm text-muted-foreground">
-              {navLinks.map(({ href, label }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className="hover:text-foreground transition-colors"
-                >
-                  {label}
-                </Link>
-              ))}
-            </div>
-          </nav>
-        </header>
-        <AuthProvider>
-          <main className="flex-1">{children}</main>
-        </AuthProvider>
+        {/* AppShell is a client component that provides AuthProvider,
+            ToastProvider, and the top nav with user menu. Server component
+            children (page content) are passed through as opaque RSC trees. */}
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

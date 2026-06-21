@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,6 +16,23 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api-client";
 
+function validateEmail(value: string): string | null {
+  if (!value) return null;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+    ? null
+    : "Enter a valid email address.";
+}
+
+function validatePassword(value: string): string | null {
+  if (!value) return null;
+  return value.length >= 8 ? null : "Password must be at least 8 characters.";
+}
+
+function validateConfirm(password: string, confirm: string): string | null {
+  if (!confirm) return null;
+  return password === confirm ? null : "Passwords do not match.";
+}
+
 export default function RegisterPage() {
   const { register } = useAuth();
   const router = useRouter();
@@ -22,29 +40,37 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Run all inline validations on submit
+    const eErr = validateEmail(email);
+    const pErr = validatePassword(password);
+    const cErr = validateConfirm(password, confirm);
+    setEmailError(eErr);
+    setPasswordError(pErr);
+    setConfirmError(cErr);
+    if (eErr || pErr || cErr) return;
+
     setError(null);
-
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-    if (password !== confirm) {
-      setError("Passwords do not match.");
-      return;
-    }
-
     setPending(true);
     try {
       await register(email, password);
       router.push("/dashboard");
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.detail);
+        if (err.status === 409 || err.detail.toLowerCase().includes("exist")) {
+          setError("An account with this email already exists.");
+        } else {
+          setError(err.detail);
+        }
       } else {
         setError("An unexpected error occurred. Please try again.");
       }
@@ -64,6 +90,7 @@ export default function RegisterPage() {
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={handleSubmit}>
+            {/* Email */}
             <div className="space-y-1">
               <label htmlFor="email" className="text-sm font-medium">
                 Email
@@ -75,10 +102,19 @@ export default function RegisterPage() {
                 required
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (emailError) setEmailError(validateEmail(e.target.value));
+                }}
+                onBlur={() => setEmailError(validateEmail(email))}
+                aria-invalid={emailError != null}
               />
+              {emailError && (
+                <p className="text-xs text-destructive">{emailError}</p>
+              )}
             </div>
 
+            {/* Password */}
             <div className="space-y-1">
               <label htmlFor="password" className="text-sm font-medium">
                 Password
@@ -90,10 +126,22 @@ export default function RegisterPage() {
                 required
                 placeholder="••••••••"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (passwordError)
+                    setPasswordError(validatePassword(e.target.value));
+                  if (confirmError)
+                    setConfirmError(validateConfirm(e.target.value, confirm));
+                }}
+                onBlur={() => setPasswordError(validatePassword(password))}
+                aria-invalid={passwordError != null}
               />
+              {passwordError && (
+                <p className="text-xs text-destructive">{passwordError}</p>
+              )}
             </div>
 
+            {/* Confirm */}
             <div className="space-y-1">
               <label htmlFor="confirm" className="text-sm font-medium">
                 Confirm password
@@ -105,14 +153,33 @@ export default function RegisterPage() {
                 required
                 placeholder="••••••••"
                 value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
+                onChange={(e) => {
+                  setConfirm(e.target.value);
+                  if (confirmError)
+                    setConfirmError(validateConfirm(password, e.target.value));
+                }}
+                onBlur={() =>
+                  setConfirmError(validateConfirm(password, confirm))
+                }
+                aria-invalid={confirmError != null}
               />
+              {confirmError && (
+                <p className="text-xs text-destructive">{confirmError}</p>
+              )}
             </div>
 
+            {/* Server error */}
             {error && (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
+              <div
+                className="flex items-start gap-2 rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2"
+                role="alert"
+              >
+                <AlertCircle
+                  size={14}
+                  className="text-destructive mt-0.5 shrink-0"
+                />
+                <p className="text-sm text-destructive">{error}</p>
+              </div>
             )}
 
             <Button type="submit" className="w-full" disabled={pending}>
@@ -120,10 +187,13 @@ export default function RegisterPage() {
             </Button>
           </form>
 
-          <p className="mt-4 text-center text-sm text-muted-foreground">
+          <p className="mt-6 text-center text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link href="/login" className="underline hover:text-foreground">
-              Sign in
+            <Link
+              href="/login"
+              className="font-medium text-foreground underline underline-offset-2 hover:opacity-80 transition-opacity"
+            >
+              Sign in →
             </Link>
           </p>
         </CardContent>
