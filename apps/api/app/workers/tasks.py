@@ -162,6 +162,7 @@ async def _set_run_failed(db: AsyncSession, run: Run, error: str) -> None:
     """Transition *run* to ``failed`` and record completion time."""
     run.status = RunStatus.failed
     run.completed_at = datetime.now(timezone.utc)
+    run.error_message = error[:2048]
     run_id = run.id
     try:
         await db.commit()
@@ -239,8 +240,23 @@ async def execute_run(ctx: dict, run_id: str) -> None:
         }
         final_state = await graph.ainvoke(initial_state)
 
-        # Determine final status from Tester outcome.
-        if final_state.get("test_passed") is False:
+        plan = final_state.get("plan") or {}
+        diffs = final_state.get("diffs") or []
+        test_passed = final_state.get("test_passed")
+
+        # Determine final status from graph outcome.
+        if not diffs and test_passed is None:
+            # Coder ran but produced no file changes — graph short-circuited
+            # before Tester.  Fail the run with a descriptive message.
+            error_msg = (
+                "Coder made no file changes — could not find relevant code "
+                "matching the issue description."
+            )
+            async with session_factory() as db:
+                run = await db.get(Run, rid)
+                if run is not None:
+                    await _set_run_failed(db, run, error_msg)
+        elif test_passed is False:
             # Retries exhausted — tests still failing after all attempts.
             retry_count = final_state.get("retry_count") or 0
             test_output = final_state.get("test_output") or ""
@@ -254,8 +270,7 @@ async def execute_run(ctx: dict, run_id: str) -> None:
                 if run is not None:
                     await _set_run_failed(db, run, error_msg)
         else:
-            # test_passed=True (tests green) or None (tester didn't run — treated
-            # as success for backward compatibility with any future graph variants).
+            # test_passed=True (tests green) → awaiting_approval.
             async with session_factory() as db:
                 run = await db.get(Run, rid)
                 if run is not None:
@@ -266,15 +281,13 @@ async def execute_run(ctx: dict, run_id: str) -> None:
                         rid, "status_change", {"status": "awaiting_approval"}
                     )
 
-        plan = final_state.get("plan") or {}
-        diffs = final_state.get("diffs") or []
         logger.info(
             "execute_run complete",
             extra={
                 "run_id": run_id,
                 "plan_steps": len(plan.get("steps", [])),
                 "diff_count": len(diffs),
-                "test_passed": final_state.get("test_passed"),
+                "test_passed": test_passed,
                 "retry_count": final_state.get("retry_count"),
             },
         )

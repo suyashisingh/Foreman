@@ -233,7 +233,15 @@ function ApprovalPanel({
 // Outcome banners
 // ---------------------------------------------------------------------------
 
-function OutcomeBanner({ status, reason }: { status: string; reason?: string | null }) {
+function OutcomeBanner({
+  status,
+  reason,
+  errorMessage,
+}: {
+  status: string;
+  reason?: string | null;
+  errorMessage?: string | null;
+}) {
   if (status === "passed") {
     return (
       <div className="rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 p-4 flex items-start gap-3">
@@ -270,9 +278,20 @@ function OutcomeBanner({ status, reason }: { status: string; reason?: string | n
     return (
       <div className="rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-4 flex items-start gap-3">
         <AlertCircle className="text-red-600 mt-0.5 shrink-0" size={18} />
-        <p className="text-sm font-medium text-red-800 dark:text-red-200">
-          Run failed. See agent steps for details.
-        </p>
+        <div>
+          <p className="text-sm font-medium text-red-800 dark:text-red-200">
+            Run failed
+          </p>
+          {errorMessage ? (
+            <p className="text-xs text-red-700/80 dark:text-red-300/80 mt-0.5">
+              {errorMessage}
+            </p>
+          ) : (
+            <p className="text-xs text-red-700/80 dark:text-red-300/80 mt-0.5">
+              See agent steps for details.
+            </p>
+          )}
+        </div>
       </div>
     );
   }
@@ -498,6 +517,7 @@ function RunPageInner({ runId }: { runId: string }) {
       <OutcomeBanner
         status={status}
         reason={runDetail?.rejection_reason}
+        errorMessage={runDetail?.error_message}
       />
 
       {/* In-progress progress indicator */}

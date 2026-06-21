@@ -63,6 +63,7 @@ class RunOut(BaseModel):
     created_at: datetime
     completed_at: datetime | None
     rejection_reason: str | None = None
+    error_message: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

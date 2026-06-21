@@ -16,7 +16,7 @@ import pytest_asyncio
 
 from app.agents.state import AgentState
 from app.db.models import Repo, RepoStatus, Run, RunStatus, User
-from app.orchestrator.graph import _route_after_tester, build_graph
+from app.orchestrator.graph import _route_after_coder, _route_after_tester, build_graph
 
 # ---------------------------------------------------------------------------
 # Graph structure tests
@@ -261,3 +261,110 @@ async def test_execute_run_sets_failed_when_retries_exhausted(
 
     await db.refresh(exec_run)
     assert exec_run.status == RunStatus.failed
+
+
+# ---------------------------------------------------------------------------
+# _route_after_coder unit tests (pure logic, no I/O)
+# ---------------------------------------------------------------------------
+
+
+def test_route_after_coder_no_diffs_returns_no_diffs() -> None:
+    """Empty diffs → 'no_diffs' (graph routes to END, tasks.py marks failed)."""
+    state = _routing_state(diffs=[])
+    assert _route_after_coder(state) == "no_diffs"
+
+
+def test_route_after_coder_with_diffs_returns_tester() -> None:
+    """Non-empty diffs → 'tester' (normal path through Tester node)."""
+    state = _routing_state(diffs=[{"file_path": "foo.py", "patch": "---\n+++"}])
+    assert _route_after_coder(state) == "tester"
+
+
+def test_route_after_coder_missing_diffs_key_returns_no_diffs() -> None:
+    """State with no 'diffs' key at all (falsy) → 'no_diffs'."""
+    state = _routing_state()
+    assert _route_after_coder(state) == "no_diffs"
+
+
+# ---------------------------------------------------------------------------
+# execute_run zero-diffs handling
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_execute_run_sets_failed_with_zero_diffs(
+    exec_run: Run, session_factory, db
+) -> None:
+    """When the graph ends with diffs=[] and test_passed=None, run is marked failed
+    with a message indicating the coder made no file changes."""
+    sandbox_mock = AsyncMock()
+    sandbox_mock.sandbox_id = "sb-zero-diffs"
+    sandbox_mock.kill = AsyncMock()
+
+    final_state = {
+        "plan": {"steps": []},
+        "diffs": [],
+        "test_passed": None,
+        "retry_count": 0,
+    }
+
+    with (
+        patch("app.workers.tasks.AsyncSandbox") as mock_sb_cls,
+        patch("app.workers.tasks.build_graph") as mock_build_graph,
+        patch("app.workers.tasks.settings") as mock_settings,
+    ):
+        mock_settings.E2B_API_KEY = "dummy"
+        mock_sb_cls.create = AsyncMock(return_value=sandbox_mock)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=final_state)
+        mock_build_graph.return_value = mock_graph
+
+        ctx = {"session_factory": session_factory}
+        from app.workers.tasks import execute_run
+
+        await execute_run(ctx, str(exec_run.id))
+
+    await db.refresh(exec_run)
+    assert exec_run.status == RunStatus.failed
+    assert exec_run.error_message is not None
+    assert "no file changes" in exec_run.error_message
+
+
+@pytest.mark.asyncio
+async def test_execute_run_retries_exhausted_uses_test_message_not_zero_diffs(
+    exec_run: Run, session_factory, db
+) -> None:
+    """diffs present + test_passed=False → 'Tests failed' message, not zero-diffs message."""
+    sandbox_mock = AsyncMock()
+    sandbox_mock.sandbox_id = "sb-test-fail"
+    sandbox_mock.kill = AsyncMock()
+
+    final_state = {
+        "plan": {"steps": []},
+        "diffs": [{"file_path": "foo.py", "patch": "---\n+++"}],
+        "test_passed": False,
+        "retry_count": 2,
+        "test_output": "FAILED test_foo.py::test_bar\n2 failed",
+    }
+
+    with (
+        patch("app.workers.tasks.AsyncSandbox") as mock_sb_cls,
+        patch("app.workers.tasks.build_graph") as mock_build_graph,
+        patch("app.workers.tasks.settings") as mock_settings,
+    ):
+        mock_settings.E2B_API_KEY = "dummy"
+        mock_sb_cls.create = AsyncMock(return_value=sandbox_mock)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=final_state)
+        mock_build_graph.return_value = mock_graph
+
+        ctx = {"session_factory": session_factory}
+        from app.workers.tasks import execute_run
+
+        await execute_run(ctx, str(exec_run.id))
+
+    await db.refresh(exec_run)
+    assert exec_run.status == RunStatus.failed
+    assert exec_run.error_message is not None
+    assert "Tests failed" in exec_run.error_message
+    assert "no file changes" not in exec_run.error_message

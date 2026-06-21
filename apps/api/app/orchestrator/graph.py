@@ -2,10 +2,10 @@
 
 Current graph:
 
-    Planner → Coder → Tester
-                      ↓ test_passed=True           → Reviewer → END (awaiting_approval)
-                      ↓ test_passed=False, retries → Coder  (retry loop)
-                      ↓ test_passed=False, exhausted → END (failed)
+    Planner → Coder ──(diffs?)──► Tester
+                  ↓ no diffs       ↓ test_passed=True → Reviewer → END (awaiting_approval)
+                  END (failed)     ↓ test_passed=False, retries → Coder (retry loop)
+                                   ↓ test_passed=False, exhausted → END (failed)
 
 The sandbox is created once in ``execute_run`` (tasks.py), threaded through
 ``AgentState``, and killed in ``execute_run``'s ``finally`` block.
@@ -21,6 +21,17 @@ from app.agents.reviewer import reviewer_node
 from app.agents.state import AgentState
 from app.agents.tester import tester_node
 from app.core.config import settings
+
+
+def _route_after_coder(state: AgentState) -> str:
+    """Skip Tester if the Coder produced no file changes.
+
+    Returns ``"no_diffs"`` → END (tasks.py marks the run failed) or
+    ``"tester"`` to proceed normally through the Tester node.
+    """
+    if not state.get("diffs"):
+        return "no_diffs"
+    return "tester"
 
 
 def _route_after_tester(state: AgentState) -> str:
@@ -56,7 +67,11 @@ def build_graph() -> Any:
     # --- Edges -------------------------------------------------------------
     builder.set_entry_point("planner")
     builder.add_edge("planner", "coder")
-    builder.add_edge("coder", "tester")
+    builder.add_conditional_edges(
+        "coder",
+        _route_after_coder,
+        {"no_diffs": END, "tester": "tester"},
+    )
     builder.add_conditional_edges(
         "tester",
         _route_after_tester,

@@ -158,6 +158,7 @@ class Run(Base):
         DateTime(timezone=True), nullable=True
     )
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="runs")
     repo: Mapped[Repo] = relationship(back_populates="runs")

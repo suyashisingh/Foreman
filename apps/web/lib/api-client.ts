@@ -63,6 +63,7 @@ export interface RunOut {
   created_at: string;
   completed_at: string | null;
   rejection_reason: string | null;
+  error_message: string | null;
 }
 
 export interface DiffOut {
