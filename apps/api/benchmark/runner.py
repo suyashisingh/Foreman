@@ -445,13 +445,13 @@ def print_summary(results: list[TaskResult], commit_sha: str) -> None:
     print(f"  {'task_id':<30} {'pass':<6} {'attempts':<10} {'time(s)':<10} cost")
     print(f"  {'-'*30} {'-'*6} {'-'*10} {'-'*10} ----")
     for r in results:
-        status = "✓" if r.passed else "✗"
+        status = "PASS" if r.passed else "FAIL"
         att = str(r.attempts_to_pass) if r.attempts_to_pass else "-"
         t = f"{r.time_to_green_s:.0f}" if r.time_to_green_s is not None else "-"
         cost_str = f"${r.token_cost_usd:.4f}"
         print(f"  {r.task_id:<30} {status:<6} {att:<10} {t:<10} {cost_str}")
         if r.error:
-            print(f"    ↳ error: {r.error}")
+            print(f"    -> error: {r.error}")
     print("=" * 64 + "\n")
 
 

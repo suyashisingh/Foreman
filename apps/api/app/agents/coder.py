@@ -138,6 +138,21 @@ def _parse_diff(raw_diff: str) -> list[dict[str, str]]:
 _GEMINI_CALL_TIMEOUT = 120  # seconds per Gemini generate_content call
 
 
+_RATE_LIMIT_FALLBACK_WAIT = 60.0  # seconds when retryDelay not in error message
+
+
+def _coder_retry_wait(exc: Exception) -> float | None:
+    """Return wait seconds for transient Gemini errors, or None to re-raise."""
+    msg = str(exc)
+    if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+        m = re.search(r"retry in (\d+(?:\.\d+)?)", msg, re.IGNORECASE)
+        delay = float(m.group(1)) if m else _RATE_LIMIT_FALLBACK_WAIT
+        return delay + 5.0
+    if "503" in msg:
+        return None  # caller uses exponential back-off for 503
+    return None  # other errors: re-raise
+
+
 async def _generate_with_retry(
     client: genai.Client,
     model: str,
@@ -145,7 +160,7 @@ async def _generate_with_retry(
     config: genai_types.GenerateContentConfig,
     max_retries: int = 3,
 ) -> Any:
-    """Call generate_content with backoff on transient 503 errors and a hard timeout."""
+    """Call generate_content with backoff on 429/503 errors and a hard timeout."""
     for attempt in range(max_retries + 1):
         try:
             return await asyncio.wait_for(
@@ -166,10 +181,23 @@ async def _generate_with_retry(
                 "Coder: Gemini call timed out, retrying (attempt %d)", attempt + 1
             )
         except Exception as exc:
-            if attempt == max_retries or "503" not in str(exc):
+            msg = str(exc)
+            is_429 = "429" in msg or "RESOURCE_EXHAUSTED" in msg
+            is_503 = "503" in msg
+            if attempt == max_retries or not (is_429 or is_503):
                 raise
-            wait = 2 ** (attempt + 1)  # 2, 4, 8 s
-            logger.warning("Coder: 503 from Gemini, retrying in %ds", wait)
+            if is_429:
+                wait = _coder_retry_wait(exc) or _RATE_LIMIT_FALLBACK_WAIT
+                logger.warning(
+                    "Coder: 429 rate-limit from Gemini, waiting %.0fs "
+                    "(attempt %d/%d)",
+                    wait, attempt + 1, max_retries + 1,
+                )
+            else:
+                wait = 2 ** (attempt + 1)  # 2, 4, 8 s for 503
+                logger.warning(
+                    "Coder: 503 from Gemini, retrying in %ds", wait
+                )
             await asyncio.sleep(wait)
     raise AssertionError("unreachable")
 
