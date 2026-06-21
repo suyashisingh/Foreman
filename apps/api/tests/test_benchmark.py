@@ -180,9 +180,7 @@ async def test_get_results_total_cost(client, bench_run: BenchmarkRun) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_results_per_task_breakdown(
-    client, bench_run: BenchmarkRun
-) -> None:
+async def test_get_results_per_task_breakdown(client, bench_run: BenchmarkRun) -> None:
     """Per-task entries include pass_at_1 and pass_at_3 flags."""
     resp = await client.get("/api/v1/benchmark/results")
     body = resp.json()

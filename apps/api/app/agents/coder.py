@@ -189,15 +189,14 @@ async def _generate_with_retry(
             if is_429:
                 wait = _coder_retry_wait(exc) or _RATE_LIMIT_FALLBACK_WAIT
                 logger.warning(
-                    "Coder: 429 rate-limit from Gemini, waiting %.0fs "
-                    "(attempt %d/%d)",
-                    wait, attempt + 1, max_retries + 1,
+                    "Coder: 429 rate-limit from Gemini, waiting %.0fs (attempt %d/%d)",
+                    wait,
+                    attempt + 1,
+                    max_retries + 1,
                 )
             else:
                 wait = 2 ** (attempt + 1)  # 2, 4, 8 s for 503
-                logger.warning(
-                    "Coder: 503 from Gemini, retrying in %ds", wait
-                )
+                logger.warning("Coder: 503 from Gemini, retrying in %ds", wait)
             await asyncio.sleep(wait)
     raise AssertionError("unreachable")
 

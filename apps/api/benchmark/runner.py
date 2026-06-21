@@ -50,7 +50,7 @@ log = logging.getLogger("benchmark")
 _TERMINAL = {"passed", "failed", "rejected", "awaiting_approval"}
 _POLL_INTERVAL_S = 15
 _INGEST_TIMEOUT_S = 300  # max wait for repo to reach ready status
-_RUN_TIMEOUT_S = 900     # max wait for a single run (15 min)
+_RUN_TIMEOUT_S = 900  # max wait for a single run (15 min)
 
 
 # ---------------------------------------------------------------------------
@@ -63,10 +63,10 @@ class TaskResult:
     task_id: str
     run_id: str | None
     passed: bool
-    attempts_to_pass: int | None   # None = failed before any test ran
+    attempts_to_pass: int | None  # None = failed before any test ran
     time_to_green_s: float | None  # None if failed
     token_cost_usd: float
-    error: str | None = None       # set when we couldn't even submit the run
+    error: str | None = None  # set when we couldn't even submit the run
 
 
 # ---------------------------------------------------------------------------
@@ -115,9 +115,7 @@ def _register_repo(
     return resp.json()["id"]
 
 
-def _get_repo(
-    client: httpx.Client, base_url: str, token: str, repo_id: str
-) -> dict:
+def _get_repo(client: httpx.Client, base_url: str, token: str, repo_id: str) -> dict:
     resp = client.get(
         f"{base_url}/api/v1/repos/{repo_id}",
         headers=_auth_headers(token),
@@ -140,9 +138,7 @@ def _create_run(
     return resp.json()["id"]
 
 
-def _get_run(
-    client: httpx.Client, base_url: str, token: str, run_id: str
-) -> dict:
+def _get_run(client: httpx.Client, base_url: str, token: str, run_id: str) -> dict:
     resp = client.get(
         f"{base_url}/api/v1/runs/{run_id}",
         headers=_auth_headers(token),
@@ -176,7 +172,9 @@ def ensure_repo(
             status = repo["status"]
             log.info(
                 "  repo exists: %s [%s] chunks=%s",
-                task.repo_name, status, repo.get("chunk_count", 0),
+                task.repo_name,
+                status,
+                repo.get("chunk_count", 0),
             )
             if status == "ready":
                 cache[task.clone_url] = repo_id
@@ -200,7 +198,9 @@ def ensure_repo(
         repo = _get_repo(client, base_url, token, repo_id)
         log.info(
             "  ingesting %s: status=%s chunks=%s",
-            task.repo_name, repo["status"], repo.get("chunk_count", 0),
+            task.repo_name,
+            repo["status"],
+            repo.get("chunk_count", 0),
         )
         if repo["status"] == "ready":
             cache[task.clone_url] = repo_id
@@ -264,12 +264,8 @@ async def _derive_metrics(
         time_to_green_s = delta.total_seconds()
 
     # Token cost: sum across all agent steps
-    total_input = sum(
-        int(s.token_usage.get("input_tokens", 0)) for s in agent_steps
-    )
-    total_output = sum(
-        int(s.token_usage.get("output_tokens", 0)) for s in agent_steps
-    )
+    total_input = sum(int(s.token_usage.get("input_tokens", 0)) for s in agent_steps)
+    total_output = sum(int(s.token_usage.get("output_tokens", 0)) for s in agent_steps)
     model = settings.GEMINI_MODEL
     token_cost = cost_usd(model, total_input, total_output)
 
@@ -370,8 +366,11 @@ async def run_task(
 
     log.info(
         "[%s] done: passed=%s attempts=%s time=%.1fs cost=$%.6f",
-        task.task_id, passed, attempts_to_pass,
-        time_to_green_s or 0, token_cost,
+        task.task_id,
+        passed,
+        attempts_to_pass,
+        time_to_green_s or 0,
+        token_cost,
     )
 
     return TaskResult(
@@ -423,7 +422,8 @@ def print_summary(results: list[TaskResult], commit_sha: str) -> None:
     passed_tasks = [r for r in results if r.passed]
     pass_at_1 = [r for r in passed_tasks if r.attempts_to_pass == 1]
     pass_at_3 = [
-        r for r in passed_tasks
+        r
+        for r in passed_tasks
         if r.attempts_to_pass is not None and r.attempts_to_pass <= 3
     ]
 
@@ -437,13 +437,13 @@ def print_summary(results: list[TaskResult], commit_sha: str) -> None:
     print(f"  Tasks run:    {total}")
     p1 = len(pass_at_1)
     p3 = len(pass_at_3)
-    print(f"  pass@1:       {p1}/{total}  ({100*p1/total:.0f}%)")
-    print(f"  pass@3:       {p3}/{total}  ({100*p3/total:.0f}%)")
+    print(f"  pass@1:       {p1}/{total}  ({100 * p1 / total:.0f}%)")
+    print(f"  pass@3:       {p3}/{total}  ({100 * p3 / total:.0f}%)")
     print(f"  avg time:     {avg_time:.1f}s  (passed tasks only)")
     print(f"  total cost:   ${total_cost:.4f}")
     print()
     print(f"  {'task_id':<30} {'pass':<6} {'attempts':<10} {'time(s)':<10} cost")
-    print(f"  {'-'*30} {'-'*6} {'-'*10} {'-'*10} ----")
+    print(f"  {'-' * 30} {'-' * 6} {'-' * 10} {'-' * 10} ----")
     for r in results:
         status = "PASS" if r.passed else "FAIL"
         att = str(r.attempts_to_pass) if r.attempts_to_pass else "-"

@@ -84,9 +84,7 @@ async def get_benchmark_results(
         pass_at_3_rate = pass_at_3_count / task_count
 
         green_times = [
-            t.time_to_green_s
-            for t in task_outs
-            if t.time_to_green_s is not None
+            t.time_to_green_s for t in task_outs if t.time_to_green_s is not None
         ]
         avg_time = sum(green_times) / len(green_times) if green_times else None
 

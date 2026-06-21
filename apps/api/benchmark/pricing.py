@@ -22,7 +22,7 @@ _PRICE_TABLE: dict[str, tuple[float, float]] = {
     "gemini-1.5-flash-8b": (3.75e-8, 1.50e-7),
 }
 
-_FALLBACK_INPUT = 7.5e-8   # USD / token — generous fallback
+_FALLBACK_INPUT = 7.5e-8  # USD / token — generous fallback
 _FALLBACK_OUTPUT = 3.0e-7  # USD / token
 
 
