@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { login, register, listRepos, createRun, registerRepo, ApiError } from "@/lib/api-client";
+import {
+  login,
+  register,
+  listRepos,
+  createRun,
+  registerRepo,
+  rejectRun,
+  approveRun,
+  ApiError,
+} from "@/lib/api-client";
 
 const mockFetch = vi.fn();
 
@@ -167,6 +176,107 @@ describe("ApiError — FastAPI 422 array-format detail", () => {
         expect(typeof err.detail).toBe("string");
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: Content-Type must survive when Authorization header is also present
+// Bug: apiFetch spread order was { headers: {CT,...init.headers}, ...init }
+// which caused ...init to overwrite headers, dropping Content-Type for any
+// call that passes both auth headers AND a body (registerRepo, createRun,
+// rejectRun). FastAPI then received Content-Type: text/plain and passed raw
+// bytes to Pydantic → "Input should be a valid dictionary or object".
+// ---------------------------------------------------------------------------
+
+describe("Content-Type: application/json is always sent", () => {
+  const repo = {
+    id: "r1",
+    name: "iniconfig",
+    clone_url: "https://github.com/pytest-dev/iniconfig.git",
+    default_branch: "main",
+    status: "pending",
+    error_message: null,
+    created_at: new Date().toISOString(),
+    chunk_count: 0,
+  };
+
+  it("registerRepo sends Content-Type alongside Authorization", async () => {
+    mockOk(repo);
+    await registerRepo("mytoken", {
+      name: "iniconfig",
+      clone_url: "https://github.com/pytest-dev/iniconfig.git",
+    });
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("/api/v1/repos"),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          Authorization: "Bearer mytoken",
+        }),
+      }),
+    );
+  });
+
+  it("createRun sends Content-Type alongside Authorization", async () => {
+    mockOk({
+      id: "run-1",
+      repo_id: "r1",
+      status: "pending",
+      issue_text: "fix bug",
+      created_at: new Date().toISOString(),
+      completed_at: null,
+      rejection_reason: null,
+    });
+    await createRun("mytoken", { repo_id: "r1", issue_text: "fix bug" });
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("/api/v1/runs"),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          Authorization: "Bearer mytoken",
+        }),
+      }),
+    );
+  });
+
+  it("rejectRun sends Content-Type alongside Authorization", async () => {
+    mockOk({ ...repo, status: "rejected", rejection_reason: "bad code" });
+    await rejectRun("mytoken", "run-1", "bad code");
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("/api/v1/runs/run-1/reject"),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          Authorization: "Bearer mytoken",
+        }),
+      }),
+    );
+  });
+
+  it("approveRun sends Authorization (no body, Content-Type irrelevant but present)", async () => {
+    mockOk({ ...repo, status: "passed" });
+    await approveRun("mytoken", "run-1");
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("/api/v1/runs/run-1/approve"),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer mytoken",
+        }),
+      }),
+    );
+  });
+
+  it("login sends Content-Type even without an Authorization header", async () => {
+    mockOk({ access_token: "tok", token_type: "bearer" });
+    await login("u@test.com", "pass");
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("/api/v1/auth/login"),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+        }),
+      }),
+    );
   });
 });
 
