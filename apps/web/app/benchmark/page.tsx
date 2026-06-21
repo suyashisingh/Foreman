@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface TaskResult {
   task_id: string;
@@ -95,7 +94,7 @@ export default function BenchmarkPage() {
     return (
       <div className="mx-auto max-w-5xl px-4 py-10">
         <h1 className="text-2xl font-bold mb-4">Benchmark</h1>
-        <p className="text-muted-foreground">Loading results…</p>
+        <p className="text-muted-foreground">Loading results&hellip;</p>
       </div>
     );
   }
@@ -104,9 +103,11 @@ export default function BenchmarkPage() {
     return (
       <div className="mx-auto max-w-5xl px-4 py-10 space-y-4">
         <h1 className="text-2xl font-bold">Benchmark</h1>
-        <Alert variant="destructive">
-          <AlertDescription>{error ?? "No data"}</AlertDescription>
-        </Alert>
+        <Card className="border-destructive">
+          <CardContent className="pt-4 text-destructive text-sm">
+            {error ?? "No data"}
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -178,10 +179,10 @@ export default function BenchmarkPage() {
                     </Badge>
                   </td>
                   <td className="px-4 py-2 text-center text-muted-foreground">
-                    {t.pass_at_1 ? "✓" : "—"}
+                    {t.pass_at_1 ? "yes" : "—"}
                   </td>
                   <td className="px-4 py-2 text-center text-muted-foreground">
-                    {t.pass_at_3 ? "✓" : "—"}
+                    {t.pass_at_3 ? "yes" : "—"}
                   </td>
                   <td className="px-4 py-2 text-right">
                     {t.attempts_to_pass ?? "—"}
