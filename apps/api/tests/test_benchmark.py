@@ -11,7 +11,6 @@ import pytest_asyncio
 
 from app.db.models import BenchmarkResult, BenchmarkRun
 
-
 # ---------------------------------------------------------------------------
 # Fixtures: seed benchmark data
 # ---------------------------------------------------------------------------
