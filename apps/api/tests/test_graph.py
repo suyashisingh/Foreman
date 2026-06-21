@@ -334,7 +334,7 @@ async def test_execute_run_sets_failed_with_zero_diffs(
 async def test_execute_run_retries_exhausted_uses_test_message_not_zero_diffs(
     exec_run: Run, session_factory, db
 ) -> None:
-    """diffs present + test_passed=False → 'Tests failed' message, not zero-diffs message."""
+    """diffs present + test_passed=False → 'Tests failed' message, not zero-diffs."""
     sandbox_mock = AsyncMock()
     sandbox_mock.sandbox_id = "sb-test-fail"
     sandbox_mock.kill = AsyncMock()

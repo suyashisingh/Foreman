@@ -3,9 +3,9 @@
 Current graph:
 
     Planner → Coder ──(diffs?)──► Tester
-                  ↓ no diffs       ↓ test_passed=True → Reviewer → END (awaiting_approval)
-                  END (failed)     ↓ test_passed=False, retries → Coder (retry loop)
-                                   ↓ test_passed=False, exhausted → END (failed)
+                  ↓ no diffs       ↓ pass  → Reviewer → END (awaiting_approval)
+                  END (failed)     ↓ retry → Coder (retry loop)
+                                   ↓ exhausted → END (failed)
 
 The sandbox is created once in ``execute_run`` (tasks.py), threaded through
 ``AgentState``, and killed in ``execute_run``'s ``finally`` block.
