@@ -7,6 +7,7 @@ import {
   registerRepo,
   rejectRun,
   approveRun,
+  getBenchmarkResults,
   ApiError,
 } from "@/lib/api-client";
 
@@ -298,5 +299,82 @@ describe("createRun", () => {
     });
     expect(result.id).toBe("run-1");
     expect(result.status).toBe("pending");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: getBenchmarkResults must call the full backend URL, not a
+// relative path. A relative /api/v1/... would hit the Next.js server
+// (port 3000) and 404 instead of reaching FastAPI (port 8000).
+// ---------------------------------------------------------------------------
+
+describe("getBenchmarkResults", () => {
+  const payload = {
+    benchmark_run_id: "abc-123",
+    commit_sha: "deadbeef1234567890abcdef1234567890abcdef",
+    created_at: new Date().toISOString(),
+    task_count: 2,
+    pass_at_1_rate: 1.0,
+    pass_at_3_rate: 1.0,
+    avg_time_to_green_s: 44.0,
+    total_token_cost_usd: 0.011,
+    tasks: [
+      {
+        task_id: "iniconfig-as-dict",
+        passed: true,
+        attempts_to_pass: 1,
+        time_to_green_s: 45.3,
+        token_cost_usd: 0.0056,
+        pass_at_1: true,
+        pass_at_3: true,
+      },
+      {
+        task_id: "iniconfig-section-names",
+        passed: true,
+        attempts_to_pass: 1,
+        time_to_green_s: 44.2,
+        token_cost_usd: 0.0052,
+        pass_at_1: true,
+        pass_at_3: true,
+      },
+    ],
+  };
+
+  it("GETs the full backend URL, not a relative path", async () => {
+    mockOk(payload);
+    await getBenchmarkResults();
+    // lastCall[0] is the URL string passed to fetch()
+    const calledUrl: string = mockFetch.mock.lastCall![0] as string;
+    // Must be an absolute URL pointing at the backend host, not a relative /api/...
+    expect(calledUrl).toMatch(/^https?:\/\//);
+    expect(calledUrl).toContain("/api/v1/benchmark/results");
+  });
+
+  it("returns typed BenchmarkResultsOut on success", async () => {
+    mockOk(payload);
+    const result = await getBenchmarkResults();
+    expect(result.task_count).toBe(2);
+    expect(result.pass_at_1_rate).toBe(1.0);
+    expect(result.tasks).toHaveLength(2);
+    expect(result.tasks[0].task_id).toBe("iniconfig-as-dict");
+  });
+
+  it("throws ApiError with status 404 when no runs exist", async () => {
+    mockError(404, "No benchmark runs found");
+    await expect(getBenchmarkResults()).rejects.toBeInstanceOf(ApiError);
+    try {
+      await getBenchmarkResults();
+    } catch (err) {
+      // second call needed to inspect — re-mock
+    }
+    mockError(404, "No benchmark runs found");
+    try {
+      await getBenchmarkResults();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        expect(err.status).toBe(404);
+        expect(err.detail).toContain("No benchmark runs found");
+      }
+    }
   });
 });

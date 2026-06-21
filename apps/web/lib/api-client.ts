@@ -261,3 +261,33 @@ export function rejectRun(
     body: JSON.stringify({ reason }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Benchmark
+// ---------------------------------------------------------------------------
+
+export interface TaskResultOut {
+  task_id: string;
+  passed: boolean;
+  attempts_to_pass: number | null;
+  time_to_green_s: number | null;
+  token_cost_usd: number | null;
+  pass_at_1: boolean;
+  pass_at_3: boolean;
+}
+
+export interface BenchmarkResultsOut {
+  benchmark_run_id: string;
+  commit_sha: string;
+  created_at: string;
+  task_count: number;
+  pass_at_1_rate: number;
+  pass_at_3_rate: number;
+  avg_time_to_green_s: number | null;
+  total_token_cost_usd: number;
+  tasks: TaskResultOut[];
+}
+
+export function getBenchmarkResults(): Promise<BenchmarkResultsOut> {
+  return apiFetch<BenchmarkResultsOut>("/api/v1/benchmark/results");
+}

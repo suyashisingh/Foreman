@@ -3,28 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-interface TaskResult {
-  task_id: string;
-  passed: boolean;
-  attempts_to_pass: number | null;
-  time_to_green_s: number | null;
-  token_cost_usd: number | null;
-  pass_at_1: boolean;
-  pass_at_3: boolean;
-}
-
-interface BenchmarkResults {
-  benchmark_run_id: string;
-  commit_sha: string;
-  created_at: string;
-  task_count: number;
-  pass_at_1_rate: number;
-  pass_at_3_rate: number;
-  avg_time_to_green_s: number | null;
-  total_token_cost_usd: number;
-  tasks: TaskResult[];
-}
+import { getBenchmarkResults, type BenchmarkResultsOut } from "@/lib/api-client";
 
 function pct(rate: number): string {
   return `${(rate * 100).toFixed(0)}%`;
@@ -70,19 +49,12 @@ function difficultyFor(taskId: string): string {
 }
 
 export default function BenchmarkPage() {
-  const [data, setData] = useState<BenchmarkResults | null>(null);
+  const [data, setData] = useState<BenchmarkResultsOut | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/v1/benchmark/results")
-      .then((r) => {
-        if (!r.ok) {
-          if (r.status === 404) throw new Error("No benchmark runs yet.");
-          throw new Error(`HTTP ${r.status}`);
-        }
-        return r.json() as Promise<BenchmarkResults>;
-      })
+    getBenchmarkResults()
       .then(setData)
       .catch((e: unknown) =>
         setError(e instanceof Error ? e.message : "Unknown error")
