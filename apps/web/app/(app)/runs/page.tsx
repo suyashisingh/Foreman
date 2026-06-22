@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AuthGuard } from "@/components/auth-guard";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
@@ -112,11 +111,9 @@ function RunsContent() {
 
 export default function RunsPage() {
   return (
-    <AuthGuard>
-      <div className="mx-auto max-w-4xl px-4 py-8 space-y-6">
-        <h1 className="text-2xl font-semibold">Run History</h1>
-        <RunsContent />
-      </div>
-    </AuthGuard>
+    <div className="mx-auto max-w-4xl px-4 py-8 space-y-6">
+      <h1 className="font-heading text-2xl font-bold">Run History</h1>
+      <RunsContent />
+    </div>
   );
 }

@@ -1,10 +1,11 @@
 """Agent run lifecycle endpoints.
 
-POST /api/v1/runs                  — create a run and enqueue the agent graph.
-GET  /api/v1/runs                  — list the caller's runs.
-GET  /api/v1/runs/{run_id}         — run detail with all agent steps and review output.
-POST /api/v1/runs/{run_id}/approve — approve diffs and mark the run passed.
-POST /api/v1/runs/{run_id}/reject  — reject the run with an optional reason.
+POST /api/v1/runs                   — create a run and enqueue the agent graph.
+GET  /api/v1/runs                   — list the caller's runs.
+GET  /api/v1/runs/{run_id}          — run detail with all agent steps and review output.
+POST /api/v1/runs/{run_id}/approve  — approve diffs and mark the run passed.
+POST /api/v1/runs/{run_id}/reject   — reject the run with an optional reason.
+POST /api/v1/runs/{run_id}/cancel   — cooperatively cancel a non-terminal run.
 """
 
 import logging
@@ -217,6 +218,44 @@ async def reject_run(
     run.status = RunStatus.rejected
     if body.reason:
         run.rejection_reason = body.reason
+    await db.commit()
+    await db.refresh(run)
+    return RunOut.model_validate(run)
+
+
+_TERMINAL_STATUSES = frozenset(
+    {RunStatus.passed, RunStatus.failed, RunStatus.rejected, RunStatus.cancelled}
+)
+
+
+@router.post(
+    "/{run_id}/cancel",
+    response_model=RunOut,
+    summary="Cooperatively cancel a non-terminal run",
+)
+async def cancel_run(
+    run_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> RunOut:
+    """Mark the run as ``cancelled`` and prevent it from being approved.
+
+    COOPERATIVE / BEST-EFFORT: this sets the DB status flag only.  Any in-flight
+    e2b sandbox or Gemini LLM call continues running in the background; its
+    eventual result is silently discarded because the run is already terminal.
+    True forced interruption of sandbox processes is out of scope.
+
+    Returns 422 if the run is already in a terminal state.
+    """
+    run = await _get_run_or_404(run_id, current_user, db)
+    if run.status in _TERMINAL_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                f"Run is already terminal ({run.status.value}) and cannot be cancelled."
+            ),
+        )
+    run.status = RunStatus.cancelled
     await db.commit()
     await db.refresh(run)
     return RunOut.model_validate(run)

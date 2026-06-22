@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AuthGuard } from "@/components/auth-guard";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/skeleton";
 import { useToast } from "@/components/toast";
@@ -19,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import * as api from "@/lib/api-client";
-import type { RepoDetail } from "@/lib/api-client";
+import type { RepoDetail, CostEstimateOut } from "@/lib/api-client";
 import { ApiError } from "@/lib/api-client";
 
 const POLL_INTERVAL_MS = 5000;
@@ -36,7 +35,10 @@ function RepoCard({
   onCreateRun: (repo: RepoDetail) => void;
 }) {
   return (
-    <Card>
+    <Card className={cn(
+      "hover:shadow-md transition-shadow duration-200",
+      repo.status === "ready" && "border-l-2 border-l-[#C9A227]",
+    )}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-base truncate">{repo.name}</CardTitle>
@@ -47,9 +49,13 @@ function RepoCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* Derive body text from status, not chunk_count — avoids "Indexing…"
+            appearing alongside a "Failed" badge when cloning failed at chunk_count=0. */}
         <p className="text-xs text-muted-foreground">
-          {repo.chunk_count > 0
-            ? `${repo.chunk_count} chunks indexed`
+          {repo.status === "ready"
+            ? `${repo.chunk_count} chunk${repo.chunk_count !== 1 ? "s" : ""} indexed`
+            : repo.status === "failed"
+            ? null
             : "Indexing…"}
         </p>
 
@@ -59,8 +65,6 @@ function RepoCard({
               Create Run
             </Button>
           )}
-          {/* Per-repo run filtering requires a new backend endpoint (GET /runs?repo_id=…).
-              Until then, link to the global runs list. */}
           <Link
             href="/runs"
             className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
@@ -185,8 +189,20 @@ function RegisterRepoForm({
 }
 
 // ---------------------------------------------------------------------------
-// Create run modal
+// Create run modal (with cost estimate)
 // ---------------------------------------------------------------------------
+
+function CostLine({ estimate }: { estimate: CostEstimateOut | null }) {
+  if (!estimate) return null;
+  const usd = estimate.estimated_usd;
+  const display =
+    usd < 0.001 ? "<$0.001" : `~$${usd.toFixed(3)}`;
+  return (
+    <p className="text-xs text-muted-foreground">
+      Estimated cost: {display} ({estimate.chunk_count} indexed chunks)
+    </p>
+  );
+}
 
 function CreateRunModal({
   repo,
@@ -203,6 +219,14 @@ function CreateRunModal({
   const [issueText, setIssueText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [estimate, setEstimate] = useState<CostEstimateOut | null>(null);
+
+  // Fetch cost estimate once when the modal mounts
+  useEffect(() => {
+    api.getCostEstimate(token, repo.id)
+      .then(setEstimate)
+      .catch(() => {}); // non-fatal — just don't show the estimate
+  }, [token, repo.id]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -226,8 +250,8 @@ function CreateRunModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-      <Card className="w-full max-w-md">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4 animate-in fade-in-0 duration-150">
+      <Card className="w-full max-w-md shadow-xl animate-in fade-in-0 zoom-in-95 duration-200">
         <CardHeader>
           <CardTitle>Create run on {repo.name}</CardTitle>
           <CardDescription>
@@ -249,6 +273,7 @@ function CreateRunModal({
                 onChange={(e) => setIssueText(e.target.value)}
               />
             </div>
+            <CostLine estimate={estimate} />
             {error && (
               <p className="text-sm text-destructive" role="alert">
                 {error}
@@ -286,10 +311,10 @@ function EmptyRepos() {
 }
 
 // ---------------------------------------------------------------------------
-// Dashboard
+// Dashboard (no AuthGuard — (app)/layout.tsx handles auth for this group)
 // ---------------------------------------------------------------------------
 
-function DashboardContent() {
+export default function DashboardPage() {
   const { token, user } = useAuth();
   const router = useRouter();
 
@@ -344,9 +369,8 @@ function DashboardContent() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 space-y-8">
-      {/* Header — user menu is in the global nav; just show email context here */}
       <div>
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <h1 className="font-heading text-2xl font-bold">Dashboard</h1>
         {user && (
           <p className="text-sm text-muted-foreground">{user.email}</p>
         )}
@@ -382,9 +406,6 @@ function DashboardContent() {
             ))}
           </div>
         )}
-
-        {/* Note: no DELETE /repos endpoint exists yet. Once added, each card
-            can expose a delete/re-ingest action without requiring new UI work. */}
       </section>
 
       {selectedRepo && (
@@ -396,13 +417,5 @@ function DashboardContent() {
         />
       )}
     </div>
-  );
-}
-
-export default function DashboardPage() {
-  return (
-    <AuthGuard>
-      <DashboardContent />
-    </AuthGuard>
   );
 }

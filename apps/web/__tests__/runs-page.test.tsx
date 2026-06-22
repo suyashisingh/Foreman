@@ -23,7 +23,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { listRuns } from "@/lib/api-client";
-import RunsPage from "@/app/runs/page";
+import RunsPage from "@/app/(app)/runs/page";
 
 const mockListRuns = vi.mocked(listRuns);
 

@@ -50,7 +50,6 @@ export default function RegisterPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // Run all inline validations on submit
     const eErr = validateEmail(email);
     const pErr = validatePassword(password);
     const cErr = validateConfirm(password, confirm);
@@ -90,7 +89,6 @@ export default function RegisterPage() {
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={handleSubmit}>
-            {/* Email */}
             <div className="space-y-1">
               <label htmlFor="email" className="text-sm font-medium">
                 Email
@@ -114,7 +112,6 @@ export default function RegisterPage() {
               )}
             </div>
 
-            {/* Password */}
             <div className="space-y-1">
               <label htmlFor="password" className="text-sm font-medium">
                 Password
@@ -141,7 +138,6 @@ export default function RegisterPage() {
               )}
             </div>
 
-            {/* Confirm */}
             <div className="space-y-1">
               <label htmlFor="confirm" className="text-sm font-medium">
                 Confirm password
@@ -168,7 +164,6 @@ export default function RegisterPage() {
               )}
             </div>
 
-            {/* Server error */}
             {error && (
               <div
                 className="flex items-start gap-2 rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2"

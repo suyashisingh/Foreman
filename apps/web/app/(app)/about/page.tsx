@@ -2,26 +2,43 @@ import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+const GOLD = "#C9A227";
+
+function Eyebrow({ code, label }: { code: string; label: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-3">
+      <div className="h-px w-8 shrink-0 bg-primary/30" />
+      <span className="font-mono text-xs uppercase tracking-widest text-primary">
+        {code} · {label}
+      </span>
+    </div>
+  );
+}
+
 const AGENTS = [
   {
+    id: "AG-01",
     name: "Planner",
     role: "Reads the issue, finds relevant code",
     detail:
       "Uses pgvector to search a semantic index of the repository's source files. Returns a step-by-step implementation plan — which files to touch and why.",
   },
   {
+    id: "AG-02",
     name: "Coder",
     role: "Writes the code",
     detail:
       "Receives the plan and iteratively edits files inside an isolated e2b cloud sandbox using read_file / write_file tool calls. Never touches your local machine.",
   },
   {
+    id: "AG-03",
     name: "Tester",
     role: "Runs pytest and feeds failure back",
     detail:
       "Executes the test suite inside the same sandbox. On failure, the full pytest output goes back to Coder as context — up to 3 retry loops before the run is marked failed.",
   },
   {
+    id: "AG-04",
     name: "Reviewer",
     role: "Assesses risk, writes the PR description",
     detail:
@@ -40,10 +57,14 @@ const STACK = [
 
 export default function AboutPage() {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12 space-y-12">
+    <div className="mx-auto max-w-3xl px-4 py-12 space-y-14">
+
       {/* Header */}
       <section className="space-y-3">
-        <h1 className="text-3xl font-bold tracking-tight">About Foreman</h1>
+        <Eyebrow code="AB-00" label="ABOUT FOREMAN" />
+        <h1 className="font-heading font-bold text-3xl tracking-tight">
+          About <em className="italic" style={{ color: GOLD }}>Foreman</em>
+        </h1>
         <p className="text-lg text-muted-foreground">
           Foreman is an autonomous software engineering platform. Give it a
           GitHub issue or feature description — it plans, codes, tests, and
@@ -59,22 +80,34 @@ export default function AboutPage() {
 
       {/* How the agents work */}
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold tracking-tight">The agents</h2>
+        <Eyebrow code="AB-01" label="THE AGENTS" />
+        <h2 className="font-heading font-bold text-xl tracking-tight">
+          Four agents.{" "}
+          <em className="italic" style={{ color: GOLD }}>One</em> shared
+          state.
+        </h2>
         <p className="text-muted-foreground text-sm">
           Four specialised agents run in sequence inside a LangGraph graph.
           Each one has a single responsibility — and they share state through a
-          typed <code className="font-mono text-xs bg-muted px-1 rounded">AgentState</code> dict.
+          typed{" "}
+          <code className="font-mono text-xs bg-muted px-1 rounded">
+            AgentState
+          </code>{" "}
+          dict.
         </p>
         <div className="space-y-3">
-          {AGENTS.map(({ name, role, detail }, i) => (
+          {AGENTS.map(({ id, name, role, detail }) => (
             <div
               key={name}
-              className="flex gap-4 p-4 rounded-lg border border-border"
+              className="relative flex gap-4 p-4 rounded-lg border border-border"
             >
-              <span className="shrink-0 text-xs font-mono text-muted-foreground bg-muted rounded px-1.5 py-0.5 h-fit mt-0.5">
-                {i + 1}
+              <span className="absolute top-3 right-3 font-mono text-[10px] text-muted-foreground/60">
+                {id}
               </span>
-              <div className="space-y-1">
+              <span className="shrink-0 text-xs font-mono text-primary bg-primary/10 rounded px-1.5 py-0.5 h-fit mt-0.5">
+                {name[0]}
+              </span>
+              <div className="space-y-1 pr-10">
                 <p className="text-sm font-semibold">
                   {name}{" "}
                   <span className="font-normal text-muted-foreground">
@@ -90,8 +123,13 @@ export default function AboutPage() {
 
       {/* Self-correction loop */}
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold tracking-tight">
-          Self-correction loop
+        <Eyebrow code="AB-02" label="SELF-CORRECTION LOOP" />
+        <h2 className="font-heading font-bold text-xl tracking-tight">
+          Fails forward,{" "}
+          <em className="italic" style={{ color: GOLD }}>
+            automatically
+          </em>
+          .
         </h2>
         <p className="text-sm text-muted-foreground">
           When Tester finds failures, it doesn&apos;t give up — it sends the
@@ -105,7 +143,8 @@ export default function AboutPage() {
 
       {/* Stack table */}
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold tracking-tight">Stack</h2>
+        <Eyebrow code="AB-03" label="STACK" />
+        <h2 className="font-heading font-bold text-xl tracking-tight">Stack</h2>
         <div className="rounded-lg border border-border overflow-hidden">
           {STACK.map(({ layer, value }, i) => (
             <div
@@ -125,7 +164,8 @@ export default function AboutPage() {
 
       {/* Design decisions */}
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold tracking-tight">
+        <Eyebrow code="AB-04" label="KEY DECISIONS" />
+        <h2 className="font-heading font-bold text-xl tracking-tight">
           Key design decisions
         </h2>
         <ul className="space-y-2 text-sm text-muted-foreground list-none">

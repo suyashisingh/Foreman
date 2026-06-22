@@ -11,6 +11,19 @@ import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/skeleton";
 import { getBenchmarkResults, type BenchmarkResultsOut, type TaskResultOut } from "@/lib/api-client";
 
+const GOLD = "#C9A227";
+
+function Eyebrow({ code, label }: { code: string; label: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-3">
+      <div className="h-px w-8 shrink-0 bg-primary/30" />
+      <span className="font-mono text-xs uppercase tracking-widest text-primary">
+        {code} · {label}
+      </span>
+    </div>
+  );
+}
+
 function pct(rate: number): string {
   return `${(rate * 100).toFixed(0)}%`;
 }
@@ -48,19 +61,19 @@ function difficultyFor(taskId: string): Difficulty {
 const DIFFICULTY_ORDER: Record<Difficulty, number> = { easy: 0, medium: 1, hard: 2 };
 
 // ---------------------------------------------------------------------------
-// Stat card
+// Stat card with monospace label
 // ---------------------------------------------------------------------------
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <Card>
       <CardHeader className="pb-1">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
+        <CardTitle className="font-mono text-xs font-medium text-muted-foreground uppercase tracking-widest">
           {label}
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-3xl font-bold">{value}</p>
+        <p className="font-heading text-3xl font-bold">{value}</p>
       </CardContent>
     </Card>
   );
@@ -147,7 +160,7 @@ function SortHeader({
 }
 
 // ---------------------------------------------------------------------------
-// Task row
+// Task row — monospace task_id, color-coded difficulty
 // ---------------------------------------------------------------------------
 
 function TaskRow({ t }: { t: TaskResultOut & { difficulty: Difficulty } }) {
@@ -164,14 +177,14 @@ function TaskRow({ t }: { t: TaskResultOut & { difficulty: Difficulty } }) {
       </td>
       <td className="px-4 py-2 text-center text-sm">
         {t.pass_at_1 ? (
-          <span className="text-green-700 dark:text-green-400 font-medium">✓</span>
+          <span className="font-medium" style={{ color: GOLD }}>✓</span>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
       </td>
       <td className="px-4 py-2 text-center text-sm">
         {t.pass_at_3 ? (
-          <span className="text-green-700 dark:text-green-400 font-medium">✓</span>
+          <span className="font-medium" style={{ color: GOLD }}>✓</span>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
@@ -252,7 +265,6 @@ export default function BenchmarkPage() {
     return copy;
   }, [enrichedTasks, sortField, sortDir]);
 
-  // Group by difficulty (easy → medium → hard)
   const groupedTasks = useMemo(() => {
     if (!groupByDifficulty) return null;
     const groups: Record<Difficulty, typeof sortedTasks> = { easy: [], medium: [], hard: [] };
@@ -265,7 +277,7 @@ export default function BenchmarkPage() {
   if (error || !data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-10 space-y-4">
-        <h1 className="text-2xl font-bold">Benchmark</h1>
+        <h1 className="font-heading font-bold text-2xl">Benchmark</h1>
         <Card className="border-destructive">
           <CardContent className="pt-4 text-destructive text-sm">
             {error ?? "No benchmark data available yet."}
@@ -300,7 +312,8 @@ export default function BenchmarkPage() {
     <div className="mx-auto max-w-5xl px-4 py-10 space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Benchmark</h1>
+        <Eyebrow code="BM-00" label="BENCHMARK RESULTS" />
+        <h1 className="font-heading font-bold text-2xl tracking-tight">Benchmark</h1>
         <p className="text-sm text-muted-foreground mt-1">
           commit{" "}
           <code className="font-mono">{data.commit_sha.slice(0, 8)}</code>
@@ -328,7 +341,7 @@ export default function BenchmarkPage() {
       {/* Table controls */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Per-task results</h2>
+          <h2 className="font-heading text-lg font-semibold">Per-task results</h2>
           <button
             onClick={() => setGroupByDifficulty((v) => !v)}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"

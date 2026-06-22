@@ -1,9 +1,10 @@
 """Repo registration, status, and retrieval endpoints.
 
-POST /api/v1/repos            — create a Repo row and enqueue ingestion.
-GET  /api/v1/repos            — list the current user's repos with chunk counts.
-GET  /api/v1/repos/{id}       — single repo detail + chunk count.
-GET  /api/v1/repos/{id}/search — cosine-similarity search over stored chunks.
+POST /api/v1/repos                      — create a Repo row and enqueue ingestion.
+GET  /api/v1/repos                      — list the current user's repos with chunk counts.
+GET  /api/v1/repos/{id}                 — single repo detail + chunk count.
+GET  /api/v1/repos/{id}/search          — cosine-similarity search over stored chunks.
+GET  /api/v1/repos/{id}/cost-estimate   — rough pre-run token-cost estimate.
 """
 
 import logging
@@ -13,10 +14,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import get_arq_pool, get_current_user, get_db
 from app.db.models import Repo, RepoChunk, RepoStatus, User
 from app.retrieval.search import ChunkSearchResult, search_repo_chunks
-from app.schemas.repos import RepoCreate, RepoDetail
+from app.schemas.repos import CostEstimateOut, RepoCreate, RepoDetail
+from benchmark.pricing import cost_usd
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +160,33 @@ async def search_repo(
             detail=f"Repo is not ready for search (current status: {repo.status}).",
         )
     return await search_repo_chunks(db, repo_id, q, top_k)
+
+
+@router.get(
+    "/{repo_id}/cost-estimate",
+    response_model=CostEstimateOut,
+    summary="Rough pre-run token-cost estimate for a repo",
+)
+async def get_cost_estimate(
+    repo_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CostEstimateOut:
+    """Return a rough estimated USD cost for one agent run against this repo.
+
+    Based on observed run costs and the repo's chunk count.  Heuristics:
+      - Planner reads ~20 chunks, generates a plan  (~5 k input, 1 k output)
+      - Coder iterates with tool calls             (~20 k input, 4 k output)
+      - Reviewer reads diff, writes review          (~8 k input, 2 k output)
+    Chunk count scales the retrieval overhead.  The estimate is labelled as
+    approximate because actual token usage varies with model output length.
+    """
+    await _get_repo_or_404(repo_id, current_user, db)
+    chunk_count = await _chunk_count(repo_id, db)
+    est_input = 25_000 + chunk_count * 100
+    est_output = 6_000
+    usd = cost_usd(settings.GEMINI_MODEL, est_input, est_output)
+    return CostEstimateOut(estimated_usd=usd, chunk_count=chunk_count)
 
 
 @router.get(

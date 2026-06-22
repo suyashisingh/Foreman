@@ -44,3 +44,10 @@ class ChunkSearchResult(BaseModel):
     symbol_name: str | None
     content: str
     similarity: float  # 1.0 = identical, -1.0 = opposite; higher is more relevant
+
+
+class CostEstimateOut(BaseModel):
+    """Rough pre-run token-cost estimate for a repo."""
+
+    estimated_usd: float
+    chunk_count: int

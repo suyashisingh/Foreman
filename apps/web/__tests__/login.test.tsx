@@ -1,7 +1,7 @@
 import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import LoginPage from "@/app/(auth)/login/page";
+import LoginPage from "@/app/(marketing)/login/page";
 import { ApiError } from "@/lib/api-client";
 
 // Mock next/navigation

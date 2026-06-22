@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
-import { AuthGuard } from "@/components/auth-guard";
 import { AgentStepCard } from "@/components/AgentStepCard";
 import { DiffViewer } from "@/components/DiffViewer";
 import { LiveLogStream } from "@/components/LiveLogStream";
@@ -13,7 +13,7 @@ import type { TimelineEntry } from "@/components/LiveLogStream";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth-context";
-import { getRun, approveRun, rejectRun, ApiError } from "@/lib/api-client";
+import { getRun, approveRun, rejectRun, createRun, cancelRun, ApiError } from "@/lib/api-client";
 import type { RunDetail } from "@/lib/api-client";
 import { RunWsClient } from "@/lib/ws-client";
 import type { WsConnectionState } from "@/lib/ws-client";
@@ -27,6 +27,7 @@ const TERMINAL = new Set([
   "failed",
   "rejected",
   "awaiting_approval",
+  "cancelled",
 ]);
 
 function isTerminal(s: string) {
@@ -48,7 +49,14 @@ function shortId(id: string) {
   return id.slice(0, 8);
 }
 
-// (StatusBadge is now the shared component from @/components/status-badge)
+// Thresholds (ms) before showing the "taking longer than usual" notice.
+// Based on observed timings: Planner/Reviewer are quick; Coder can take 20-60s.
+const STUCK_THRESHOLDS: Record<string, number> = {
+  planning: 90_000,
+  reviewing: 90_000,
+  coding: 180_000,
+  testing: 180_000,
+};
 
 // ---------------------------------------------------------------------------
 // Connection indicator
@@ -270,6 +278,14 @@ function OutcomeBanner({
       </div>
     );
   }
+  if (status === "cancelled") {
+    return (
+      <div className="rounded-lg bg-secondary border border-border p-4 flex items-start gap-3">
+        <AlertCircle className="text-muted-foreground mt-0.5 shrink-0" size={18} />
+        <p className="text-sm text-muted-foreground">Run was cancelled.</p>
+      </div>
+    );
+  }
   return null;
 }
 
@@ -279,6 +295,8 @@ function OutcomeBanner({
 
 function RunPageInner({ runId }: { runId: string }) {
   const { token } = useAuth();
+  const router = useRouter();
+  const { addToast } = useToast();
 
   const [runDetail, setRunDetail] = useState<RunDetail | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -286,6 +304,16 @@ function RunPageInner({ runId }: { runId: string }) {
   const [connError, setConnError] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [liveStatus, setLiveStatus] = useState<string>("pending");
+  const [cancelling, setCancelling] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  // Stuck-run indicator: track how long the current status has been observed
+  const statusSinceRef = useRef<{ status: string; since: number } | null>(null);
+  const [isStuck, setIsStuck] = useState(false);
+
+  // Page visibility notification
+  const wasHiddenRef = useRef(false);
+  const completedWhileHiddenRef = useRef<string | null>(null);
 
   function pushEntry(
     text: string,
@@ -298,7 +326,58 @@ function RunPageInner({ runId }: { runId: string }) {
     ]);
   }
 
-  // Single effect: initial REST load → then WS (if not terminal)
+  // Stuck-run check: reset and restart interval whenever liveStatus changes
+  useEffect(() => {
+    setIsStuck(false);
+    if (isTerminal(liveStatus)) {
+      statusSinceRef.current = null;
+      return;
+    }
+
+    const threshold = STUCK_THRESHOLDS[liveStatus] ?? null;
+    if (!threshold) return;
+
+    statusSinceRef.current = { status: liveStatus, since: Date.now() };
+
+    const id = setInterval(() => {
+      if (statusSinceRef.current?.status !== liveStatus) return;
+      if (Date.now() - statusSinceRef.current.since > threshold) {
+        setIsStuck(true);
+      }
+    }, 5_000);
+
+    return () => clearInterval(id);
+  }, [liveStatus]);
+
+  // Mark when run goes terminal while tab is hidden
+  useEffect(() => {
+    if (isTerminal(liveStatus) && wasHiddenRef.current) {
+      completedWhileHiddenRef.current = liveStatus;
+    }
+  }, [liveStatus]);
+
+  // Page visibility handler — show toast when user returns to a completed tab
+  useEffect(() => {
+    function onVisibility() {
+      if (document.hidden) {
+        wasHiddenRef.current = true;
+      } else {
+        wasHiddenRef.current = false;
+        const completed = completedWhileHiddenRef.current;
+        if (completed) {
+          completedWhileHiddenRef.current = null;
+          addToast(
+            `Run ${completed.replace("_", " ")} while you were away.`,
+            completed === "passed" ? "success" : "info",
+          );
+        }
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [addToast]);
+
+  // Single effect: initial REST load → WS (if not terminal)
   useEffect(() => {
     if (!token) return;
 
@@ -306,7 +385,6 @@ function RunPageInner({ runId }: { runId: string }) {
     let wsClient: RunWsClient | null = null;
 
     async function init() {
-      // 1. Load initial run state
       let detail: RunDetail;
       try {
         detail = await getRun(token!, runId);
@@ -323,14 +401,11 @@ function RunPageInner({ runId }: { runId: string }) {
       setRunDetail(detail);
       setLiveStatus(detail.status);
 
-      // 2. Skip WS if run already terminal
       if (isTerminal(detail.status)) {
         setConnState("disconnected");
         return;
       }
 
-      // 3. Connect WS — do a re-fetch after connect to catch any events that
-      //    happened between the REST load and the WS subscribe.
       wsClient = new RunWsClient({
         token: token!,
         runId,
@@ -343,7 +418,6 @@ function RunPageInner({ runId }: { runId: string }) {
             `${capitalize(data.agent)} step ${data.step_index + 1} completed · ${data.latency_ms}ms · ${tokens} tokens`,
             ts,
           );
-          // Re-fetch for full step data (input/output/tool_calls)
           getRun(token!, runId)
             .then((d) => { if (!cancelled) { setRunDetail(d); setLiveStatus(d.status); } })
             .catch(() => {});
@@ -357,7 +431,6 @@ function RunPageInner({ runId }: { runId: string }) {
             ts,
             data.status === "failed" ? "error" : "muted",
           );
-          // For awaiting_approval, re-fetch to get review + diffs
           if (data.status === "awaiting_approval") {
             getRun(token!, runId)
               .then((d) => { if (!cancelled) { setRunDetail(d); setLiveStatus(d.status); } })
@@ -389,7 +462,6 @@ function RunPageInner({ runId }: { runId: string }) {
 
       wsClient.connect();
 
-      // Brief re-fetch to catch anything that happened between step 1 and WS subscribe
       getRun(token!, runId)
         .then((d) => {
           if (cancelled) return;
@@ -411,7 +483,7 @@ function RunPageInner({ runId }: { runId: string }) {
     };
   }, [token, runId]);
 
-  // Approve / reject handlers — update local state without a refetch
+  // Approve / reject handlers
   function handleApproved() {
     setRunDetail((prev) =>
       prev ? { ...prev, status: "passed", diffs: prev.diffs.map((d) => ({ ...d, approved: true })) } : prev,
@@ -428,14 +500,54 @@ function RunPageInner({ runId }: { runId: string }) {
     pushEntry("Rejected by you", new Date().toISOString(), "warning");
   }
 
+  // Cancel handler (cooperative/best-effort — does not kill in-flight sandbox)
+  async function handleCancel() {
+    if (!token) return;
+    setCancelling(true);
+    try {
+      await cancelRun(token, runId);
+      setRunDetail((prev) => prev ? { ...prev, status: "cancelled" } : prev);
+      setLiveStatus("cancelled");
+      pushEntry("Cancelled by you", new Date().toISOString(), "muted");
+      addToast("Run cancelled.", "info");
+    } catch (err) {
+      addToast(
+        err instanceof ApiError ? err.detail : "Failed to cancel run.",
+        "error",
+      );
+    } finally {
+      setCancelling(false);
+    }
+  }
+
+  // Retry handler — resubmits with same repo + issue, navigates to new run
+  async function handleRetry() {
+    if (!token || !runDetail) return;
+    setRetrying(true);
+    try {
+      const newRun = await createRun(token, {
+        repo_id: runDetail.repo_id,
+        issue_text: runDetail.issue_text,
+      });
+      addToast("New run started.", "success");
+      router.push(`/runs/${newRun.id}`);
+    } catch (err) {
+      addToast(
+        err instanceof ApiError ? err.detail : "Failed to start retry run.",
+        "error",
+      );
+      setRetrying(false);
+    }
+  }
+
   // ---- Render ---------------------------------------------------------------
 
   if (fetchError) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-10">
         <p className="text-sm text-destructive">{fetchError}</p>
-        <Link href="/dashboard" className="text-sm underline mt-2 inline-block">
-          ← Dashboard
+        <Link href="/runs" className="text-sm underline mt-2 inline-block">
+          ← Runs
         </Link>
       </div>
     );
@@ -451,11 +563,11 @@ function RunPageInner({ runId }: { runId: string }) {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Link
-              href="/dashboard"
+              href="/runs"
               className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft size={13} />
-              Dashboard
+              Runs
             </Link>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
@@ -478,6 +590,26 @@ function RunPageInner({ runId }: { runId: string }) {
             </p>
           )}
         </div>
+
+        {/* Cancel / Retry actions */}
+        <div className="flex gap-2 shrink-0">
+          {inProgress && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="text-destructive border-destructive/30 hover:bg-destructive/5"
+            >
+              {cancelling ? "Cancelling…" : "Cancel run"}
+            </Button>
+          )}
+          {status === "failed" && runDetail && (
+            <Button size="sm" onClick={handleRetry} disabled={retrying}>
+              {retrying ? "Starting…" : "Retry"}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Connection error banner (non-fatal) */}
@@ -485,6 +617,15 @@ function RunPageInner({ runId }: { runId: string }) {
         <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-2 text-sm text-destructive flex items-center gap-2">
           <AlertCircle size={14} />
           {connError} — live updates paused. Refresh the page to reconnect.
+        </div>
+      )}
+
+      {/* Stuck-run notice */}
+      {isStuck && inProgress && (
+        <div className="rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 px-4 py-2 text-sm text-amber-800 dark:text-amber-200">
+          This is taking longer than usual — the agent is still working.
+          Gemini free-tier rate limits (15 req/min) can cause delays between
+          calls. You can wait or cancel and retry.
         </div>
       )}
 
@@ -534,7 +675,6 @@ function RunPageInner({ runId }: { runId: string }) {
               )}
             </div>
 
-            {/* Diffs */}
             {runDetail.diffs.length > 0 && (
               <div className="space-y-2">
                 <h2 className="text-sm font-semibold">
@@ -545,7 +685,6 @@ function RunPageInner({ runId }: { runId: string }) {
               </div>
             )}
 
-            {/* Approve / Reject */}
             {status === "awaiting_approval" && token && (
               <ApprovalPanel
                 runId={runId}
@@ -583,7 +722,6 @@ function RunPageInner({ runId }: { runId: string }) {
         </div>
       )}
 
-      {/* Event timeline */}
       <LiveLogStream
         entries={timeline}
         title="Run Events"
@@ -598,9 +736,5 @@ function RunPageInner({ runId }: { runId: string }) {
 }
 
 export function RunPageClient({ runId }: { runId: string }) {
-  return (
-    <AuthGuard>
-      <RunPageInner runId={runId} />
-    </AuthGuard>
-  );
+  return <RunPageInner runId={runId} />;
 }

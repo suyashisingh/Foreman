@@ -82,6 +82,11 @@ const STATUS_CONFIG: Record<string, StatusCfg> = {
     className:
       "bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-900/30 dark:text-amber-200",
   },
+  cancelled: {
+    label: "Cancelled",
+    className:
+      "bg-secondary text-secondary-foreground border border-border",
+  },
 };
 
 export function StatusBadge({

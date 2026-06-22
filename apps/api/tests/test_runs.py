@@ -540,3 +540,101 @@ async def test_reject_run_returns_422_if_wrong_status(
 
     resp = await auth_client.post(f"{RUNS_URL}/{run_id}/reject", json={})
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# POST /runs/{id}/cancel
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def planning_run(db, ready_repo):
+    """A run in 'planning' status (non-terminal, cancellable)."""
+    result = await db.execute(select(User).where(User.email == _AUTH_USER["email"]))
+    user = result.scalar_one()
+
+    run = Run(
+        user_id=user.id,
+        repo_id=ready_repo.id,
+        issue_text="Cancel me",
+        status=RunStatus.planning,
+    )
+    db.add(run)
+    await db.commit()
+    await db.refresh(run)
+    return run
+
+
+@pytest.mark.asyncio
+async def test_cancel_run_transitions_to_cancelled(auth_client, planning_run, db):
+    """POST /runs/{id}/cancel sets status=cancelled."""
+    resp = await auth_client.post(f"{RUNS_URL}/{planning_run.id}/cancel")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "cancelled"
+
+    await db.refresh(planning_run)
+    assert planning_run.status == RunStatus.cancelled
+
+
+@pytest.mark.asyncio
+async def test_cancel_run_requires_auth(client):
+    """POST /runs/{id}/cancel without a token returns 401."""
+    resp = await client.post(f"{RUNS_URL}/{uuid.uuid4()}/cancel")
+    assert resp.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_cancel_run_returns_404_for_other_user(auth_client, db, ready_repo):
+    """POST /runs/{id}/cancel returns 404 for another user's run."""
+    other = User(
+        email="other_cancel@example.com",
+        password_hash="$argon2id$v=19$m=65536,t=3,p=4$placeholder",
+        name="Other",
+    )
+    db.add(other)
+    await db.flush()
+    other_repo = Repo(
+        user_id=other.id,
+        name="repo",
+        clone_url="https://github.com/x/y.git",
+        default_branch="main",
+        status=RepoStatus.ready,
+    )
+    db.add(other_repo)
+    await db.flush()
+    other_run = Run(
+        user_id=other.id,
+        repo_id=other_repo.id,
+        issue_text="Private",
+        status=RunStatus.planning,
+    )
+    db.add(other_run)
+    await db.commit()
+
+    resp = await auth_client.post(f"{RUNS_URL}/{other_run.id}/cancel")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_cancel_run_returns_422_if_already_terminal(auth_client, awaiting_run, db):
+    """POST /runs/{id}/cancel on an awaiting_approval run transitions to cancelled.
+    Then a second cancel on the now-cancelled run returns 422.
+    """
+    # First cancel succeeds
+    resp = await auth_client.post(f"{RUNS_URL}/{awaiting_run.id}/cancel")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "cancelled"
+
+    # Second cancel on already-terminal run returns 422
+    resp2 = await auth_client.post(f"{RUNS_URL}/{awaiting_run.id}/cancel")
+    assert resp2.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_cancel_run_returns_422_if_passed(auth_client, awaiting_run, db):
+    """POST /runs/{id}/cancel returns 422 when the run is already passed."""
+    # Approve first to set status=passed
+    await auth_client.post(f"{RUNS_URL}/{awaiting_run.id}/approve")
+
+    resp = await auth_client.post(f"{RUNS_URL}/{awaiting_run.id}/cancel")
+    assert resp.status_code == 422

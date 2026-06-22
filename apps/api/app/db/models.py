@@ -58,6 +58,7 @@ class RunStatus(str, enum.Enum):
     failed = "failed"
     awaiting_approval = "awaiting_approval"
     rejected = "rejected"
+    cancelled = "cancelled"
 
 
 class AgentRole(str, enum.Enum):

@@ -263,6 +263,52 @@ export function rejectRun(
 }
 
 // ---------------------------------------------------------------------------
+// Runs — cancel
+// ---------------------------------------------------------------------------
+
+export function cancelRun(token: string, runId: string): Promise<RunOut> {
+  return apiFetch<RunOut>(`/api/v1/runs/${runId}/cancel`, {
+    method: "POST",
+    headers: authHeader(token),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// System
+// ---------------------------------------------------------------------------
+
+export interface SystemStatusOut {
+  database_ok: boolean;
+  redis_ok: boolean;
+  gemini_key_configured: boolean;
+  voyage_key_configured: boolean;
+  e2b_key_configured: boolean;
+  gemini_model: string;
+}
+
+export function getSystemStatus(): Promise<SystemStatusOut> {
+  return apiFetch<SystemStatusOut>("/api/v1/system/status");
+}
+
+// ---------------------------------------------------------------------------
+// Cost estimate
+// ---------------------------------------------------------------------------
+
+export interface CostEstimateOut {
+  estimated_usd: number;
+  chunk_count: number;
+}
+
+export function getCostEstimate(
+  token: string,
+  repoId: string,
+): Promise<CostEstimateOut> {
+  return apiFetch<CostEstimateOut>(`/api/v1/repos/${repoId}/cost-estimate`, {
+    headers: authHeader(token),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Benchmark
 // ---------------------------------------------------------------------------
 

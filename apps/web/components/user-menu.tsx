@@ -9,7 +9,6 @@ export function UserMenu() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     if (!open) return;
     function handleMouseDown(e: MouseEvent) {
@@ -43,7 +42,7 @@ export function UserMenu() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-1.5 w-56 rounded-lg border border-border bg-popover text-popover-foreground shadow-lg py-1 z-50"
+          className="absolute right-0 top-full mt-1.5 w-56 rounded-lg border border-border bg-popover text-popover-foreground shadow-lg py-1 z-50 animate-in fade-in-0 zoom-in-95 duration-150"
         >
           <div className="px-3 py-2 text-xs text-muted-foreground truncate">
             {user.email}
