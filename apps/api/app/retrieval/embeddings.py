@@ -123,8 +123,7 @@ async def _embed_batch(
             if attempt < _MAX_RETRIES:
                 wait = _BACKOFF_BASE * (2.0**attempt)  # 30, 60, 120, 240
                 logger.warning(
-                    "Voyage API rate limited (429) — retrying in %.0fs "
-                    "(attempt %d/%d)",
+                    "Voyage API rate limited (429) — retrying in %.0fs (attempt %d/%d)",
                     wait,
                     attempt + 1,
                     _MAX_RETRIES,
