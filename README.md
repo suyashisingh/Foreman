@@ -43,3 +43,8 @@ uv run python -m benchmark.runner \
 
 Results are scoped per user — navigate to `/benchmark` in the app to see your
 results. The public landing page shows a global aggregate across all users.
+
+> **Note:** If you had benchmark runs before the per-user migration (commit
+> `8c04453`), they were assigned to the first user created in the database,
+> not to your account. Re-run the benchmark CLI with your own credentials to
+> populate your results.

@@ -1,7 +1,6 @@
 "use client";
 
 import { motion, type Variants } from "framer-motion";
-import { BenchmarkStats } from "@/components/benchmark-stats";
 import { Bot, BarChart3, Radio } from "lucide-react";
 import Link from "next/link";
 
@@ -302,52 +301,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Section 4: LIVE RESULTS — cream ─────────────────────────── */}
-      <section style={{ background: CREAM }}>
-        <div className="mx-auto max-w-5xl px-4 py-20 space-y-6">
-          <motion.div
-            variants={stagger(0.08)}
-            initial="hidden"
-            animate="show"
-          >
-            <motion.div variants={fadeUp}>
-              <Eyebrow code="S-03" label="LIVE RESULTS" />
-              <h2 className="font-heading font-bold text-3xl text-[#1e2a2e]">
-                The numbers aren&apos;t{" "}
-                <em className="italic" style={{ color: GOLD }}>
-                  estimated
-                </em>
-                .
-              </h2>
-              <p className="mt-2 text-sm text-[#1e2a2e]/60 max-w-lg">
-                Fetched live from the public benchmark endpoint — not hand-picked.
-              </p>
-            </motion.div>
-
-            <motion.div
-              variants={fadeUp}
-              className="mt-6 rounded-xl border p-6"
-              style={{
-                borderColor: "#d6d0c8",
-                background: "#fff",
-                boxShadow: "0 1px 3px 0 rgba(0,0,0,0.06)",
-              }}
-            >
-              <BenchmarkStats variant="grid" />
-              <p className="mt-4 text-xs text-muted-foreground">
-                <Link
-                  href="/benchmark"
-                  className="underline underline-offset-2 hover:text-foreground transition-colors"
-                >
-                  Full per-task results →
-                </Link>
-              </p>
-            </motion.div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ── Section 5: CTA BAND — gold ──────────────────────────────── */}
+      {/* ── Section 4: CTA BAND — gold ──────────────────────────────── */}
       <section style={{ background: GOLD }}>
         <motion.div
           variants={stagger(0.07)}
@@ -356,7 +310,7 @@ export default function HomePage() {
           className="mx-auto max-w-5xl px-4 py-20 space-y-5"
         >
           <motion.div variants={fadeUp}>
-            <Eyebrow code="S-04" label="GET STARTED" />
+            <Eyebrow code="S-03" label="GET STARTED" />
             <h2 className="font-heading font-bold text-3xl text-white">
               Ready to see it{" "}
               <em className="italic" style={{ color: "rgba(255,255,255,0.75)" }}>

@@ -5,7 +5,7 @@
 // prev/next controls here — the backend schema already returns task_count.
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Terminal } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/skeleton";
@@ -290,47 +290,7 @@ export default function BenchmarkPage() {
     );
   }
 
-  if (!data || data.task_count === 0) {
-    return (
-      <div className="mx-auto max-w-5xl px-4 py-10 space-y-4">
-        <Eyebrow code="BM-00" label="BENCHMARK RESULTS" />
-        <h1 className="font-heading font-bold text-2xl tracking-tight">Benchmark</h1>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Terminal size={14} className="text-muted-foreground" />
-              No results yet
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>
-              Register the benchmark repos, then run the CLI to populate your
-              results:
-            </p>
-            <ol className="list-decimal list-inside space-y-1 text-xs">
-              <li>
-                Register these repos on the{" "}
-                <a href="/dashboard" className="underline underline-offset-2">
-                  Dashboard
-                </a>
-                :
-                <ul className="mt-1 ml-4 space-y-0.5 list-none font-mono text-[11px]">
-                  <li>https://github.com/pytest-dev/iniconfig.git</li>
-                  <li>https://github.com/jmoiron/humanize.git</li>
-                  <li>https://github.com/SethMMorton/natsort.git</li>
-                </ul>
-              </li>
-              <li>Wait for all three repos to reach Ready status.</li>
-              <li>Run the benchmark CLI:</li>
-            </ol>
-            <pre className="rounded-md bg-muted px-4 py-3 font-mono text-xs overflow-x-auto">
-              {`cd apps/api\nuv run python -m benchmark.runner \\\n  --email ${user?.email ?? "your@email.com"} \\\n  --password yourpassword`}
-            </pre>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  if (!data) return null;
 
   const tableHeaderProps = {
     currentField: sortField,
@@ -360,12 +320,18 @@ export default function BenchmarkPage() {
         <Eyebrow code="BM-00" label="BENCHMARK RESULTS" />
         <h1 className="font-heading font-bold text-2xl tracking-tight">Benchmark</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          commit{" "}
-          <code className="font-mono">{data.commit_sha.slice(0, 8)}</code>
-          {" · "}
-          {new Date(data.created_at).toLocaleDateString()}
-          {" · "}
-          {data.task_count} task{data.task_count !== 1 ? "s" : ""}
+          {data.task_count > 0 ? (
+            <>
+              commit{" "}
+              <code className="font-mono">{data.commit_sha.slice(0, 8)}</code>
+              {" · "}
+              {new Date(data.created_at).toLocaleDateString()}
+              {" · "}
+              {data.task_count} task{data.task_count !== 1 ? "s" : ""}
+            </>
+          ) : (
+            "No runs yet for this account"
+          )}
         </p>
         <p className="text-sm text-muted-foreground mt-3 max-w-2xl">
           These results come from a curated benchmark suite of real open-source
@@ -374,6 +340,22 @@ export default function BenchmarkPage() {
           pass rate on independently verified tasks.
         </p>
       </div>
+
+      {/* Inline CLI notice — only shown when user has no runs yet */}
+      {data.task_count === 0 && (
+        <div className="rounded-md border border-dashed border-border px-4 py-3 text-sm text-muted-foreground flex items-start gap-2">
+          <span className="font-mono text-xs text-primary shrink-0 mt-0.5">
+            CLI
+          </span>
+          <span>
+            No results yet for this account. Run the benchmark to populate:{" "}
+            <code className="font-mono text-xs">
+              cd apps/api &amp;&amp; uv run python -m benchmark.runner --email{" "}
+              {user?.email ?? "your@email.com"} --password yourpassword
+            </code>
+          </span>
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

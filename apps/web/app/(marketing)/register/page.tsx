@@ -7,7 +7,6 @@ import { motion } from "framer-motion";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BenchmarkStats } from "@/components/benchmark-stats";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api-client";
 
@@ -147,17 +146,31 @@ export default function RegisterPage() {
           paste a public repo URL and describe the issue.
         </p>
 
-        {/* Live benchmark numbers */}
+        {/* Proof points */}
         <div className="space-y-3">
-          <p
-            className="text-xs font-mono uppercase tracking-widest"
-            style={{ color: GOLD }}
-          >
-            Live Benchmark
-          </p>
-          <div className="text-white [&_p]:text-white/60 [&_.font-bold]:text-white">
-            <BenchmarkStats variant="grid" />
-          </div>
+          {[
+            {
+              title: "Four agents. One pipeline.",
+              desc: "Planner, Coder, Tester, and Reviewer work in sequence inside a LangGraph graph.",
+            },
+            {
+              title: "Isolated e2b sandboxes.",
+              desc: "No code runs on your machine — every run executes in a fresh cloud environment.",
+            },
+            {
+              title: "Human-in-the-loop approval.",
+              desc: "You review every diff before anything merges. The agent stops and waits.",
+            },
+          ].map(({ title, desc }) => (
+            <div
+              key={title}
+              className="rounded-lg px-4 py-3"
+              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}
+            >
+              <p className="text-sm font-semibold text-white">{title}</p>
+              <p className="mt-0.5 text-xs text-white/55">{desc}</p>
+            </div>
+          ))}
         </div>
       </div>
 
