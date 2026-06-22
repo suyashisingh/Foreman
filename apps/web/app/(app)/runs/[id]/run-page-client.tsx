@@ -677,11 +677,33 @@ function RunPageInner({ runId }: { runId: string }) {
 
             {runDetail.diffs.length > 0 && (
               <div className="space-y-2">
-                <h2 className="text-sm font-semibold">
-                  Diffs ({runDetail.diffs.length} file
-                  {runDetail.diffs.length !== 1 ? "s" : ""})
-                </h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold">
+                    Diffs ({runDetail.diffs.length} file
+                    {runDetail.diffs.length !== 1 ? "s" : ""})
+                  </h2>
+                  <button
+                    onClick={() => {
+                      const patch = runDetail.diffs.map((d) => d.patch).join("\n");
+                      navigator.clipboard.writeText(patch).then(() => {
+                        addToast("Patch copied to clipboard", "success");
+                      });
+                    }}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Copy patch
+                  </button>
+                </div>
                 <DiffViewer diffs={runDetail.diffs} />
+                {(status === "awaiting_approval" || status === "passed") && (
+                  <p className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+                    The diff above shows what the agents changed. Use{" "}
+                    <span className="font-mono">Copy patch</span> to apply it
+                    locally with{" "}
+                    <code className="font-mono">git apply</code>. The sandbox
+                    environment is cleaned up after approval.
+                  </p>
+                )}
               </div>
             )}
 

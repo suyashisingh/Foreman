@@ -322,6 +322,12 @@ export default function BenchmarkPage() {
           {" · "}
           {data.task_count} task{data.task_count !== 1 ? "s" : ""}
         </p>
+        <p className="text-sm text-muted-foreground mt-3 max-w-2xl">
+          These results come from a curated benchmark suite of real open-source
+          issues, run against the live stack and measured automatically. Results
+          are not from demo runs — they reflect the agent pipeline&apos;s actual
+          pass rate on independently verified tasks.
+        </p>
       </div>
 
       {/* Stat cards */}
