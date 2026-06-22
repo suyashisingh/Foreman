@@ -248,9 +248,7 @@ async def test_authenticated_user_with_own_run_sees_it(
     """When a user runs the benchmark themselves, the endpoint returns their data."""
     from sqlalchemy import select as _select
 
-    result = await db.execute(
-        _select(User).where(User.email == "testuser@example.com")
-    )
+    result = await db.execute(_select(User).where(User.email == "testuser@example.com"))
     me: User = result.scalar_one()
 
     br = BenchmarkRun(
@@ -288,9 +286,7 @@ async def test_user_a_results_not_visible_to_user_b(
     """User A's benchmark run is invisible to User B."""
     from sqlalchemy import select as _select
 
-    result = await db.execute(
-        _select(User).where(User.email == "testuser@example.com")
-    )
+    result = await db.execute(_select(User).where(User.email == "testuser@example.com"))
     user_a: User = result.scalar_one()
 
     br = BenchmarkRun(
