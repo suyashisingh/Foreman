@@ -45,7 +45,6 @@ vi.mock("framer-motion", () => {
     "onAnimationStart", "onAnimationComplete", "onDrag", "onDragStart", "onDragEnd",
   ]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const makePassthrough = (tag: string) =>
     forwardRef<HTMLElement, Record<string, unknown>>(function MotionEl(props, ref) {
       const rest: Record<string, unknown> = { ref };

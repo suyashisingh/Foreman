@@ -1,10 +1,10 @@
 """Repo registration, status, and retrieval endpoints.
 
-POST /api/v1/repos                      — create a Repo row and enqueue ingestion.
-GET  /api/v1/repos                      — list the current user's repos with chunk counts.
-GET  /api/v1/repos/{id}                 — single repo detail + chunk count.
-GET  /api/v1/repos/{id}/search          — cosine-similarity search over stored chunks.
-GET  /api/v1/repos/{id}/cost-estimate   — rough pre-run token-cost estimate.
+POST /api/v1/repos                    — create a Repo row and enqueue ingestion.
+GET  /api/v1/repos                    — list the current user's repos with chunk counts.
+GET  /api/v1/repos/{id}               — single repo detail + chunk count.
+GET  /api/v1/repos/{id}/search        — cosine-similarity search over stored chunks.
+GET  /api/v1/repos/{id}/cost-estimate — rough pre-run token-cost estimate.
 """
 
 import logging

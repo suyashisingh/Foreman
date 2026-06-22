@@ -7,11 +7,11 @@ actual key values).  Designed for the Settings page.
 
 import logging
 
-import app.db.session as _db_session
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 
+import app.db.session as _db_session
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)

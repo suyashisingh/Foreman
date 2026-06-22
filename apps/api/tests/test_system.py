@@ -1,4 +1,4 @@
-"""Tests for the /api/v1/system/status and /api/v1/repos/{id}/cost-estimate endpoints."""
+"""Tests for /api/v1/system/status and /api/v1/repos/{id}/cost-estimate endpoints."""
 
 from __future__ import annotations
 

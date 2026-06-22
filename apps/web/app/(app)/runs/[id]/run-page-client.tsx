@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
@@ -328,7 +328,7 @@ function RunPageInner({ runId }: { runId: string }) {
 
   // Stuck-run check: reset and restart interval whenever liveStatus changes
   useEffect(() => {
-    setIsStuck(false);
+    startTransition(() => { setIsStuck(false); });
     if (isTerminal(liveStatus)) {
       statusSinceRef.current = null;
       return;

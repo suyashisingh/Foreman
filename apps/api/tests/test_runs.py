@@ -616,7 +616,9 @@ async def test_cancel_run_returns_404_for_other_user(auth_client, db, ready_repo
 
 
 @pytest.mark.asyncio
-async def test_cancel_run_returns_422_if_already_terminal(auth_client, awaiting_run, db):
+async def test_cancel_run_returns_422_if_already_terminal(
+    auth_client, awaiting_run, db
+):
     """POST /runs/{id}/cancel on an awaiting_approval run transitions to cancelled.
     Then a second cancel on the now-cancelled run returns 422.
     """

@@ -364,7 +364,7 @@ describe("getBenchmarkResults", () => {
     await expect(getBenchmarkResults()).rejects.toBeInstanceOf(ApiError);
     try {
       await getBenchmarkResults();
-    } catch (err) {
+    } catch {
       // second call needed to inspect — re-mock
     }
     mockError(404, "No benchmark runs found");

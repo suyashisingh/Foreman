@@ -2,7 +2,6 @@
 
 import { motion, type Variants } from "framer-motion";
 import { BenchmarkStats } from "@/components/benchmark-stats";
-import { cn } from "@/lib/utils";
 import { Bot, BarChart3, Radio } from "lucide-react";
 import Link from "next/link";
 
