@@ -5,7 +5,6 @@ import { Info } from "lucide-react";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -14,7 +13,7 @@ import { getSystemStatus } from "@/lib/api-client";
 import type { SystemStatusOut } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
-// Status badge (separate from run StatusBadge — these are infra checks)
+// Service status badge
 // ---------------------------------------------------------------------------
 
 function ServiceBadge({ ok }: { ok: boolean }) {
@@ -31,32 +30,40 @@ function ServiceBadge({ ok }: { ok: boolean }) {
   );
 }
 
-function StatusTable({ status }: { status: SystemStatusOut }) {
-  const rows = [
-    { label: "Database", ok: status.database_ok },
-    { label: "Redis", ok: status.redis_ok },
-    { label: "Gemini API key", ok: status.gemini_key_configured },
-    { label: "Voyage AI key", ok: status.voyage_key_configured },
-    { label: "E2B API key", ok: status.e2b_key_configured },
-  ];
+// ---------------------------------------------------------------------------
+// Individual service cards
+// ---------------------------------------------------------------------------
 
+function StatusCard({ label, ok }: { label: string; ok: boolean }) {
+  return (
+    <Card size="sm">
+      <CardContent className="flex items-center justify-between py-1">
+        <span className="text-sm font-medium">{label}</span>
+        <ServiceBadge ok={ok} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function ModelCard({ model }: { model: string }) {
+  return (
+    <Card size="sm">
+      <CardContent className="flex items-center justify-between py-1">
+        <span className="text-sm font-medium">Model</span>
+        <code className="text-xs font-mono bg-muted px-2 py-0.5 rounded">
+          {model}
+        </code>
+      </CardContent>
+    </Card>
+  );
+}
+
+function StatusSkeleton() {
   return (
     <div className="space-y-2">
-      {rows.map(({ label, ok }) => (
-        <div
-          key={label}
-          className="flex items-center justify-between py-1.5 border-b border-border last:border-0"
-        >
-          <span className="text-sm">{label}</span>
-          <ServiceBadge ok={ok} />
-        </div>
+      {[1, 2, 3, 4, 5, 6].map((n) => (
+        <div key={n} className="h-[52px] rounded-xl bg-muted/50 animate-pulse" />
       ))}
-      <div className="flex items-center justify-between py-1.5">
-        <span className="text-sm">Model</span>
-        <code className="text-xs font-mono bg-muted px-2 py-0.5 rounded">
-          {status.gemini_model}
-        </code>
-      </div>
     </div>
   );
 }
@@ -75,6 +82,16 @@ export default function SettingsPage() {
       .catch(() => {}); // non-fatal — show empty state
   }, []);
 
+  const services = status
+    ? [
+        { label: "Database", ok: status.database_ok },
+        { label: "Redis", ok: status.redis_ok },
+        { label: "Gemini API key", ok: status.gemini_key_configured },
+        { label: "Voyage AI key", ok: status.voyage_key_configured },
+        { label: "E2B API key", ok: status.e2b_key_configured },
+      ]
+    : [];
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 space-y-8">
       <div>
@@ -84,29 +101,26 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* System status */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">System Status</CardTitle>
-          <CardDescription>
+      {/* System status — each service is its own card */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-base font-semibold">System Status</h2>
+          <p className="text-sm text-muted-foreground">
             Infrastructure connectivity and API key configuration.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {status ? (
-            <StatusTable status={status} />
-          ) : (
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <div
-                  key={n}
-                  className="h-8 rounded bg-muted/50 animate-pulse"
-                />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </p>
+        </div>
+
+        {status ? (
+          <div className="space-y-2">
+            {services.map(({ label, ok }) => (
+              <StatusCard key={label} label={label} ok={ok} />
+            ))}
+            <ModelCard model={status.gemini_model} />
+          </div>
+        ) : (
+          <StatusSkeleton />
+        )}
+      </section>
 
       {/* Rate limit notice */}
       <Card>

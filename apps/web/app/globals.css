@@ -50,7 +50,7 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
+  --background: oklch(0.98 0.008 80);
   --foreground: oklch(0.13 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.13 0 0);
@@ -72,7 +72,7 @@
   --accent-foreground: oklch(0.20 0 0);
 
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.91 0 0);
+  --border: oklch(0.88 0.01 80);
   --input: oklch(0.91 0 0);
 
   /* Focus rings match primary */
@@ -148,6 +148,16 @@
   html {
     @apply font-sans;
   }
+}
+
+@keyframes page-fadein {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bar-slide {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(300%); }
 }
 
 @layer utilities {

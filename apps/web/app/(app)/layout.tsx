@@ -19,7 +19,12 @@ export default function AppGroupLayout({
   const content = (
     <div className="flex min-h-screen">
       <AppSidebar />
-      <main className="flex-1 min-w-0 md:ml-14 lg:ml-56">{children}</main>
+      <main
+        key={pathname}
+        className="flex-1 min-w-0 md:ml-14 lg:ml-56 animate-[page-fadein_200ms_ease-out_both]"
+      >
+        {children}
+      </main>
     </div>
   );
 

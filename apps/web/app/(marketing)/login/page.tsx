@@ -3,18 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { BenchmarkStats } from "@/components/benchmark-stats";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api-client";
+
+const DARK = "#28363C";
+const GOLD = "#D4A820";
 
 function categoriseError(err: unknown): { message: string; hint?: string } {
   if (err instanceof ApiError) {
@@ -78,15 +76,63 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center px-4 py-12">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Sign in</CardTitle>
-          <CardDescription>
+    <div className="flex min-h-[calc(100vh-60px)]">
+      {/* Left panel — brand + stats, hidden on mobile */}
+      <div
+        className="hidden md:flex md:w-2/5 flex-col justify-center px-10 py-16 shrink-0"
+        style={{ background: DARK }}
+      >
+        {/* Logo */}
+        <div className="flex items-center gap-3 mb-10">
+          <span
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-sm font-bold"
+            style={{ background: GOLD, color: DARK }}
+          >
+            F
+          </span>
+          <span className="font-semibold text-lg text-white tracking-tight">
+            Foreman
+          </span>
+        </div>
+
+        {/* Tagline */}
+        <h2 className="font-heading font-bold text-2xl text-white leading-snug mb-4">
+          Autonomous agents.<br />
+          Real code.<br />
+          Measured results.
+        </h2>
+        <p className="text-white/50 text-sm leading-relaxed mb-10">
+          AI-powered software engineering that ships — with every change
+          verified against a real test suite.
+        </p>
+
+        {/* Live benchmark numbers */}
+        <div className="space-y-3">
+          <p
+            className="text-xs font-mono uppercase tracking-widest"
+            style={{ color: GOLD }}
+          >
+            Live Benchmark
+          </p>
+          <div className="text-white [&_p]:text-white/60 [&_.font-bold]:text-white">
+            <BenchmarkStats variant="grid" />
+          </div>
+        </div>
+      </div>
+
+      {/* Right panel — form */}
+      <div className="flex-1 flex items-center justify-center bg-white px-6 py-12">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.28, ease: "easeOut" }}
+          className="w-full max-w-sm"
+        >
+          <h1 className="font-heading text-2xl font-bold mb-1">Sign in</h1>
+          <p className="text-sm text-muted-foreground mb-7">
             Enter your credentials to access Foreman.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </p>
+
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-1">
               <label htmlFor="email" className="text-sm font-medium">
@@ -163,8 +209,8 @@ export default function LoginPage() {
               Create one →
             </Link>
           </p>
-        </CardContent>
-      </Card>
+        </motion.div>
+      </div>
     </div>
   );
 }

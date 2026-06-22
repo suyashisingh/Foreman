@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/skeleton";
 import { useToast } from "@/components/toast";
@@ -22,6 +23,23 @@ import type { RepoDetail, CostEstimateOut } from "@/lib/api-client";
 import { ApiError } from "@/lib/api-client";
 
 const POLL_INTERVAL_MS = 5000;
+
+function timeAgo(dateStr: string): string {
+  const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000);
+  if (days === 0) return "today";
+  if (days === 1) return "1 day ago";
+  return `${days} days ago`;
+}
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.2, ease: "easeOut" as const } },
+};
+
+const containerVariants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.05 } },
+};
 
 // ---------------------------------------------------------------------------
 // Repo card
@@ -54,7 +72,6 @@ function RepoCard({
 
   return (
     <Card className={cn(
-      "hover:shadow-md transition-shadow duration-200",
       repo.status === "ready" && "border-l-2 border-l-[#D4A820]",
     )}>
       <CardHeader className="pb-2">
@@ -68,12 +85,25 @@ function RepoCard({
       </CardHeader>
       <CardContent className="space-y-3">
         {repo.status === "ready" && (
-          <p className="text-xs text-muted-foreground">
-            {repo.chunk_count} chunk{repo.chunk_count !== 1 ? "s" : ""} indexed
-          </p>
+          <>
+            <p className="text-xs text-muted-foreground">
+              {repo.chunk_count} chunk{repo.chunk_count !== 1 ? "s" : ""} indexed
+            </p>
+            <p className="text-xs text-muted-foreground/60">
+              Registered {timeAgo(repo.created_at)}
+            </p>
+          </>
         )}
         {repo.status !== "ready" && repo.status !== "failed" && (
-          <p className="text-xs text-muted-foreground">Indexing…</p>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Indexing…</p>
+            <div className="h-1 w-full rounded-full overflow-hidden bg-[#D4A820]/20">
+              <div
+                className="h-full w-1/2 rounded-full bg-[#D4A820]"
+                style={{ animation: "bar-slide 1.5s ease-in-out infinite" }}
+              />
+            </div>
+          </div>
         )}
 
         {repo.status === "failed" && (
@@ -448,17 +478,23 @@ export default function DashboardPage() {
         ) : repos.length === 0 && !loadError ? (
           <EmptyRepos />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <motion.div
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            variants={containerVariants}
+            initial="hidden"
+            animate="show"
+          >
             {repos.map((repo) => (
-              <RepoCard
-                key={repo.id}
-                repo={repo}
-                onCreateRun={setSelectedRepo}
-                onRetry={handleRetry}
-                onDelete={handleDelete}
-              />
+              <motion.div key={repo.id} variants={cardVariants}>
+                <RepoCard
+                  repo={repo}
+                  onCreateRun={setSelectedRepo}
+                  onRetry={handleRetry}
+                  onDelete={handleDelete}
+                />
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         )}
       </section>
 
