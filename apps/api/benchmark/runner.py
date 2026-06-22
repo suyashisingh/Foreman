@@ -36,6 +36,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import settings
+from app.core.security import decode_access_token
 from app.db.models import AgentStep, BenchmarkResult, BenchmarkRun, TestAttempt
 from benchmark.pricing import cost_usd
 from benchmark.tasks import TASK_MAP, TASKS, BenchmarkTask
@@ -488,16 +489,8 @@ async def async_main(args: argparse.Namespace) -> None:
     except Exception:
         commit_sha = "unknown"
 
-    # Create a BenchmarkRun record
-    bench_run_id = uuid.uuid4()
-    async with session_factory() as db:
-        db.add(BenchmarkRun(id=bench_run_id, commit_sha=commit_sha))
-        await db.commit()
-
-    log.info("Benchmark run ID: %s", bench_run_id)
-
-    # Login to the API
     with httpx.Client() as http:
+        # Login and extract user_id before creating the BenchmarkRun record.
         try:
             token = _login(http, args.base_url, args.email, args.password)
         except Exception as exc:
@@ -505,6 +498,24 @@ async def async_main(args: argparse.Namespace) -> None:
             sys.exit(1)
 
         log.info("Logged in as %s", args.email)
+
+        # Decode JWT to get user_id (sub claim) — avoids an extra API round-trip.
+        try:
+            payload = decode_access_token(token)
+            user_id = uuid.UUID(payload["sub"])
+        except Exception as exc:
+            log.error("Failed to extract user_id from token: %s", exc)
+            sys.exit(1)
+
+        # Create a BenchmarkRun record scoped to this user.
+        bench_run_id = uuid.uuid4()
+        async with session_factory() as db:
+            db.add(
+                BenchmarkRun(id=bench_run_id, user_id=user_id, commit_sha=commit_sha)
+            )
+            await db.commit()
+
+        log.info("Benchmark run ID: %s", bench_run_id)
 
         repo_cache: dict[str, str] = {}
         results: list[TaskResult] = []

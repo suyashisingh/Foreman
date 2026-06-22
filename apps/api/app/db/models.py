@@ -101,6 +101,7 @@ class User(Base):
 
     repos: Mapped[list[Repo]] = relationship(back_populates="user")
     runs: Mapped[list[Run]] = relationship(back_populates="user")
+    benchmark_runs: Mapped[list[BenchmarkRun]] = relationship(back_populates="user")
 
     __table_args__ = (UniqueConstraint("email", name="uq_users_email"),)
 
@@ -268,11 +269,15 @@ class BenchmarkRun(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     commit_sha: Mapped[str] = mapped_column(String(40), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
+    user: Mapped[User] = relationship(back_populates="benchmark_runs")
     results: Mapped[list[BenchmarkResult]] = relationship(
         back_populates="benchmark_run"
     )

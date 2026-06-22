@@ -345,6 +345,8 @@ export interface BenchmarkResultsOut {
   tasks: TaskResultOut[];
 }
 
-export function getBenchmarkResults(): Promise<BenchmarkResultsOut> {
-  return apiFetch<BenchmarkResultsOut>("/api/v1/benchmark/results");
+export function getBenchmarkResults(token?: string): Promise<BenchmarkResultsOut> {
+  return apiFetch<BenchmarkResultsOut>("/api/v1/benchmark/results", {
+    headers: token ? authHeader(token) : undefined,
+  });
 }

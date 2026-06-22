@@ -1,8 +1,9 @@
 """Reusable FastAPI dependencies.
 
-``get_db``          — yields an async SQLAlchemy session per request.
-``get_current_user``— validates the Bearer JWT and returns the authenticated User.
-``get_arq_pool``    — returns the application-scoped ARQ job queue pool.
+``get_db``                    — yields an async SQLAlchemy session per request.
+``get_current_user``          — validates the Bearer JWT and returns the User.
+``get_current_user_optional`` — like get_current_user but returns None if no/bad token.
+``get_arq_pool``              — returns the application-scoped ARQ job queue pool.
 """
 
 import uuid
@@ -18,6 +19,7 @@ from app.core.security import decode_access_token
 from app.db.models import User
 
 _bearer = HTTPBearer()
+_bearer_optional = HTTPBearer(auto_error=False)
 
 
 async def get_arq_pool(request: Request) -> Any:
@@ -69,3 +71,32 @@ async def get_current_user(
         raise _401
 
     return user
+
+
+async def get_current_user_optional(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_optional),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    """Like get_current_user but returns None instead of raising 401.
+
+    Used for endpoints that serve both public and authenticated callers with
+    different data shapes (e.g. global aggregate vs. per-user filtered view).
+    """
+    if credentials is None:
+        return None
+
+    try:
+        payload = decode_access_token(credentials.credentials)
+    except jwt.InvalidTokenError:
+        return None
+
+    sub: str | None = payload.get("sub")
+    if sub is None:
+        return None
+
+    try:
+        user_id = uuid.UUID(sub)
+    except ValueError:
+        return None
+
+    return await db.get(User, user_id)

@@ -5,10 +5,11 @@
 // prev/next controls here — the backend schema already returns task_count.
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Terminal } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/skeleton";
+import { useAuth } from "@/lib/auth-context";
 import { getBenchmarkResults, type BenchmarkResultsOut, type TaskResultOut } from "@/lib/api-client";
 
 const GOLD = "#D4A820";
@@ -205,6 +206,7 @@ function TaskRow({ t }: { t: TaskResultOut & { difficulty: Difficulty } }) {
 // ---------------------------------------------------------------------------
 
 export default function BenchmarkPage() {
+  const { user, token, loading: authLoading } = useAuth();
   const [data, setData] = useState<BenchmarkResultsOut | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -214,13 +216,14 @@ export default function BenchmarkPage() {
   const [groupByDifficulty, setGroupByDifficulty] = useState(false);
 
   useEffect(() => {
-    getBenchmarkResults()
+    if (authLoading) return; // wait for auth context to resolve
+    getBenchmarkResults(token ?? undefined)
       .then(setData)
       .catch((e: unknown) =>
         setError(e instanceof Error ? e.message : "Unknown error"),
       )
       .finally(() => setLoading(false));
-  }, []);
+  }, [authLoading, token]);
 
   function handleSort(field: SortField) {
     if (field === sortField) {
@@ -274,13 +277,55 @@ export default function BenchmarkPage() {
 
   if (loading) return <BenchmarkSkeleton />;
 
-  if (error || !data) {
+  if (error) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-10 space-y-4">
         <h1 className="font-heading font-bold text-2xl">Benchmark</h1>
         <Card className="border-destructive">
           <CardContent className="pt-4 text-destructive text-sm">
-            {error ?? "No benchmark data available yet."}
+            {error}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!data || data.task_count === 0) {
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-10 space-y-4">
+        <Eyebrow code="BM-00" label="BENCHMARK RESULTS" />
+        <h1 className="font-heading font-bold text-2xl tracking-tight">Benchmark</h1>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Terminal size={14} className="text-muted-foreground" />
+              No results yet
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Register the benchmark repos, then run the CLI to populate your
+              results:
+            </p>
+            <ol className="list-decimal list-inside space-y-1 text-xs">
+              <li>
+                Register these repos on the{" "}
+                <a href="/dashboard" className="underline underline-offset-2">
+                  Dashboard
+                </a>
+                :
+                <ul className="mt-1 ml-4 space-y-0.5 list-none font-mono text-[11px]">
+                  <li>https://github.com/pytest-dev/iniconfig.git</li>
+                  <li>https://github.com/jmoiron/humanize.git</li>
+                  <li>https://github.com/SethMMorton/natsort.git</li>
+                </ul>
+              </li>
+              <li>Wait for all three repos to reach Ready status.</li>
+              <li>Run the benchmark CLI:</li>
+            </ol>
+            <pre className="rounded-md bg-muted px-4 py-3 font-mono text-xs overflow-x-auto">
+              {`cd apps/api\nuv run python -m benchmark.runner \\\n  --email ${user?.email ?? "your@email.com"} \\\n  --password yourpassword`}
+            </pre>
           </CardContent>
         </Card>
       </div>
