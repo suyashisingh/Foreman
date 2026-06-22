@@ -198,3 +198,49 @@ async def test_search_requires_ready_status(auth_client, mock_arq_pool):
         f"{REPOS_URL}/{repo_id}/search", params={"q": "hello"}
     )
     assert search_resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# DELETE /repos/{id} — owner deletes, 404 for another user's repo, 401 unauthed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_delete_repo_204_owner(auth_client, mock_arq_pool):
+    """Owner can delete their own repo; endpoint returns 204 No Content."""
+    post_resp = await auth_client.post(
+        REPOS_URL,
+        json={"name": "to-delete", "clone_url": "https://github.com/x/y.git"},
+    )
+    assert post_resp.status_code == 202
+    repo_id = post_resp.json()["id"]
+
+    del_resp = await auth_client.delete(f"{REPOS_URL}/{repo_id}")
+    assert del_resp.status_code == 204
+
+    # Confirm the repo is gone
+    get_resp = await auth_client.get(f"{REPOS_URL}/{repo_id}")
+    assert get_resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_repo_404_other_user(
+    auth_client, other_auth_client, mock_arq_pool
+):
+    """Another user's repo returns 404 from DELETE (same as GET isolation)."""
+    post_resp = await auth_client.post(
+        REPOS_URL,
+        json={"name": "private-repo", "clone_url": "https://github.com/x/y.git"},
+    )
+    repo_id = post_resp.json()["id"]
+
+    del_resp = await other_auth_client.delete(f"{REPOS_URL}/{repo_id}")
+    assert del_resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_repo_401_no_auth(client):
+    """DELETE without a token returns 401 regardless of resource existence."""
+    fake_id = "00000000-0000-0000-0000-000000000000"
+    del_resp = await client.delete(f"{REPOS_URL}/{fake_id}")
+    assert del_resp.status_code in (401, 403)

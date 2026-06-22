@@ -11,7 +11,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/skeleton";
 import { getBenchmarkResults, type BenchmarkResultsOut, type TaskResultOut } from "@/lib/api-client";
 
-const GOLD = "#C9A227";
+const GOLD = "#D4A820";
 
 function Eyebrow({ code, label }: { code: string; label: string }) {
   return (

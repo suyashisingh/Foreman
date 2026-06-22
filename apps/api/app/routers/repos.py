@@ -189,6 +189,22 @@ async def get_cost_estimate(
     return CostEstimateOut(estimated_usd=usd, chunk_count=chunk_count)
 
 
+@router.delete(
+    "/{repo_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a repo and all its chunks",
+)
+async def delete_repo(
+    repo_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Hard-delete the repo row; RepoChunk rows cascade via FK ondelete=CASCADE."""
+    repo = await _get_repo_or_404(repo_id, current_user, db)
+    await db.delete(repo)
+    await db.commit()
+
+
 @router.get(
     "/{repo_id}",
     response_model=RepoDetail,

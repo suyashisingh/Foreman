@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { X } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth-context";
 import * as api from "@/lib/api-client";
 import type { RunOut } from "@/lib/api-client";
@@ -68,6 +70,7 @@ function RunsContent() {
   const [runs, setRuns] = useState<RunOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     if (!token) return;
@@ -77,6 +80,12 @@ function RunsContent() {
       .catch(() => setError("Failed to load runs."))
       .finally(() => setLoading(false));
   }, [token]);
+
+  const filteredRuns = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return runs;
+    return runs.filter((r) => r.issue_text.toLowerCase().includes(q));
+  }, [runs, query]);
 
   if (loading) {
     return (
@@ -101,10 +110,35 @@ function RunsContent() {
   }
 
   return (
-    <div className="space-y-2">
-      {runs.map((run) => (
-        <RunRow key={run.id} run={run} />
-      ))}
+    <div className="space-y-4">
+      <div className="relative">
+        <Input
+          placeholder="Filter by issue text…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="pr-8"
+          aria-label="Filter runs"
+        />
+        {query && (
+          <button
+            aria-label="Clear filter"
+            onClick={() => setQuery("")}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+
+      {filteredRuns.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No runs match your filter.</p>
+      ) : (
+        <div className="space-y-2">
+          {filteredRuns.map((run) => (
+            <RunRow key={run.id} run={run} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

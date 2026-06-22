@@ -11,7 +11,7 @@ import Link from "next/link";
 
 const DARK = "#28363C";  // dark slate-teal — hero, features, how-it-works
 const CREAM = "#F5F2EC"; // warm cream — live results, step cards
-const GOLD = "#C9A227"; // warm golden amber — CTA band, eyebrow labels, accent
+const GOLD = "#D4A820"; // warm golden yellow — CTA band, eyebrow labels, accent
 
 // ---------------------------------------------------------------------------
 // Animation variants

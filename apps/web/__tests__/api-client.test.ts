@@ -5,6 +5,7 @@ import {
   listRepos,
   createRun,
   registerRepo,
+  deleteRepo,
   rejectRun,
   approveRun,
   getBenchmarkResults,
@@ -376,5 +377,26 @@ describe("getBenchmarkResults", () => {
         expect(err.detail).toContain("No benchmark runs found");
       }
     }
+  });
+});
+
+describe("deleteRepo", () => {
+  it("sends DELETE to /repos/{id} with Authorization header", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 204 });
+    await deleteRepo("mytoken", "repo-uuid-123");
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("/api/v1/repos/repo-uuid-123"),
+      expect.objectContaining({
+        method: "DELETE",
+        headers: expect.objectContaining({
+          Authorization: "Bearer mytoken",
+        }),
+      }),
+    );
+  });
+
+  it("throws ApiError on 404", async () => {
+    mockError(404, "Repo not found.");
+    await expect(deleteRepo("tok", "missing-id")).rejects.toBeInstanceOf(ApiError);
   });
 });

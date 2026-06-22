@@ -43,7 +43,7 @@ function SidebarLink({
       className={cn(
         "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
         active
-          ? "text-[#C9A227] font-medium"
+          ? "text-[#D4A820] font-medium"
           : "text-white/60 hover:text-white hover:bg-white/10",
       )}
     >
@@ -51,7 +51,7 @@ function SidebarLink({
       {active && (
         <motion.div
           layoutId="sidebar-nav-highlight"
-          className="absolute inset-0 rounded-md bg-[#C9A227]/20"
+          className="absolute inset-0 rounded-md bg-[#D4A820]/20"
           transition={{ type: "spring", stiffness: 380, damping: 32 }}
         />
       )}
@@ -71,7 +71,7 @@ export function AppSidebar() {
       <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:left-0 md:z-30 md:w-14 lg:w-56 border-r border-white/10 bg-[#28363C]">
         {/* Logo */}
         <div className="flex items-center gap-2 px-3 py-4 border-b border-white/10">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#C9A227] text-[#28363C] text-xs font-bold">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#D4A820] text-[#28363C] text-xs font-bold">
             F
           </span>
           <Link
@@ -109,7 +109,7 @@ export function AppSidebar() {
         {user ? (
           <div className="border-t border-white/10 px-2 py-3 space-y-1">
             <div className="flex items-center gap-2 px-3 py-1">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#C9A227] text-[#28363C] text-xs font-medium">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#D4A820] text-[#28363C] text-xs font-medium">
                 {user.email[0].toUpperCase()}
               </span>
               <span className="hidden lg:block text-xs text-white/50 truncate">
@@ -148,7 +148,7 @@ export function AppSidebar() {
               href={href}
               className={cn(
                 "whitespace-nowrap hover:text-white transition-colors",
-                isActive(href, pathname, exact) && "text-[#C9A227] font-medium",
+                isActive(href, pathname, exact) && "text-[#D4A820] font-medium",
               )}
             >
               {label}
@@ -158,7 +158,7 @@ export function AppSidebar() {
             href="/settings"
             className={cn(
               "whitespace-nowrap hover:text-white transition-colors",
-              pathname === "/settings" && "text-[#C9A227] font-medium",
+              pathname === "/settings" && "text-[#D4A820] font-medium",
             )}
           >
             Settings

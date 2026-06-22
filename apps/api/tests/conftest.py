@@ -118,6 +118,12 @@ _AUTH_USER = {
     "name": "Test",
 }
 
+_OTHER_AUTH_USER = {
+    "email": "otheruser@example.com",
+    "password": "testpassword2",
+    "name": "Other",
+}
+
 
 @pytest_asyncio.fixture
 async def auth_client(client):
@@ -127,6 +133,28 @@ async def auth_client(client):
     token = reg.json()["access_token"]
     client.headers.update({"Authorization": f"Bearer {token}"})
     return client
+
+
+@pytest_asyncio.fixture
+async def other_auth_client(mock_arq_pool):
+    """A second AsyncClient authenticated as a different user."""
+    app = create_app()
+
+    async def _override_get_db():
+        async with _TestSession() as session:
+            yield session
+
+    app.dependency_overrides[_deps.get_db] = _override_get_db
+    app.dependency_overrides[_deps.get_arq_pool] = lambda: mock_arq_pool
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
+        reg = await ac.post("/api/v1/auth/register", json=_OTHER_AUTH_USER)
+        assert reg.status_code == 201
+        token = reg.json()["access_token"]
+        ac.headers.update({"Authorization": f"Bearer {token}"})
+        yield ac
 
 
 # ---------------------------------------------------------------------------

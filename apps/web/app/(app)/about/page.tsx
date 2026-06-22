@@ -2,7 +2,7 @@ import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const GOLD = "#C9A227";
+const GOLD = "#D4A820";
 
 function Eyebrow({ code, label }: { code: string; label: string }) {
   return (

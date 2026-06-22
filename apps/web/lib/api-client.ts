@@ -112,6 +112,10 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
 
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -213,6 +217,13 @@ export function registerRepo(
     method: "POST",
     headers: authHeader(token),
     body: JSON.stringify(body),
+  });
+}
+
+export function deleteRepo(token: string, repoId: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/repos/${repoId}`, {
+    method: "DELETE",
+    headers: authHeader(token),
   });
 }
 

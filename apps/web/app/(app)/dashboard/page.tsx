@@ -30,14 +30,32 @@ const POLL_INTERVAL_MS = 5000;
 function RepoCard({
   repo,
   onCreateRun,
+  onRetry,
+  onDelete,
 }: {
   repo: RepoDetail;
   onCreateRun: (repo: RepoDetail) => void;
+  onRetry?: (repo: RepoDetail) => Promise<void>;
+  onDelete?: (repo: RepoDetail) => Promise<void>;
 }) {
+  const [pendingAction, setPendingAction] = useState<"retry" | "delete" | null>(null);
+
+  async function handleRetry() {
+    if (!onRetry || pendingAction) return;
+    setPendingAction("retry");
+    try { await onRetry(repo); } finally { setPendingAction(null); }
+  }
+
+  async function handleDelete() {
+    if (!onDelete || pendingAction) return;
+    setPendingAction("delete");
+    try { await onDelete(repo); } finally { setPendingAction(null); }
+  }
+
   return (
     <Card className={cn(
       "hover:shadow-md transition-shadow duration-200",
-      repo.status === "ready" && "border-l-2 border-l-[#C9A227]",
+      repo.status === "ready" && "border-l-2 border-l-[#D4A820]",
     )}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
@@ -49,32 +67,56 @@ function RepoCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {/* Derive body text from status, not chunk_count — avoids "Indexing…"
-            appearing alongside a "Failed" badge when cloning failed at chunk_count=0. */}
-        <p className="text-xs text-muted-foreground">
-          {repo.status === "ready"
-            ? `${repo.chunk_count} chunk${repo.chunk_count !== 1 ? "s" : ""} indexed`
-            : repo.status === "failed"
-            ? null
-            : "Indexing…"}
-        </p>
+        {repo.status === "ready" && (
+          <p className="text-xs text-muted-foreground">
+            {repo.chunk_count} chunk{repo.chunk_count !== 1 ? "s" : ""} indexed
+          </p>
+        )}
+        {repo.status !== "ready" && repo.status !== "failed" && (
+          <p className="text-xs text-muted-foreground">Indexing…</p>
+        )}
 
-        <div className="flex gap-2">
-          {repo.status === "ready" && (
-            <Button size="sm" onClick={() => onCreateRun(repo)}>
-              Create Run
-            </Button>
-          )}
-          <Link
-            href="/runs"
-            className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
-          >
-            View runs →
-          </Link>
-        </div>
+        {repo.status === "failed" && (
+          <div className="space-y-2">
+            {repo.error_message && (
+              <p className="text-xs text-destructive">{repo.error_message}</p>
+            )}
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleRetry}
+                disabled={pendingAction !== null}
+              >
+                {pendingAction === "retry" ? "Retrying…" : "Retry ingestion"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={handleDelete}
+                disabled={pendingAction !== null}
+              >
+                {pendingAction === "delete" ? "Deleting…" : "Delete"}
+              </Button>
+            </div>
+          </div>
+        )}
 
-        {repo.status === "failed" && repo.error_message && (
-          <p className="text-xs text-destructive">{repo.error_message}</p>
+        {repo.status !== "failed" && (
+          <div className="flex gap-2">
+            {repo.status === "ready" && (
+              <Button size="sm" onClick={() => onCreateRun(repo)}>
+                Create Run
+              </Button>
+            )}
+            <Link
+              href="/runs"
+              className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+            >
+              View runs →
+            </Link>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -367,6 +409,16 @@ export default function DashboardPage() {
     router.push(`/runs/${runId}`);
   }
 
+  async function handleRetry(repo: RepoDetail) {
+    await api.registerRepo(token!, { name: repo.name, clone_url: repo.clone_url });
+    await refreshRepos();
+  }
+
+  async function handleDelete(repo: RepoDetail) {
+    await api.deleteRepo(token!, repo.id);
+    setRepos((prev) => prev.filter((r) => r.id !== repo.id));
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 space-y-8">
       <div>
@@ -402,6 +454,8 @@ export default function DashboardPage() {
                 key={repo.id}
                 repo={repo}
                 onCreateRun={setSelectedRepo}
+                onRetry={handleRetry}
+                onDelete={handleDelete}
               />
             ))}
           </div>

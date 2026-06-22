@@ -23,9 +23,45 @@ function validateEmail(value: string): string | null {
     : "Enter a valid email address.";
 }
 
+const PASSWORD_RULES = [
+  { id: "length", label: "8+ characters", test: (p: string) => p.length >= 8 },
+  {
+    id: "upper",
+    label: "Uppercase letter",
+    test: (p: string) => /[A-Z]/.test(p),
+  },
+  { id: "number", label: "Number", test: (p: string) => /[0-9]/.test(p) },
+  {
+    id: "special",
+    label: "Special character",
+    test: (p: string) => /[^A-Za-z0-9]/.test(p),
+  },
+];
+
+function PasswordStrengthHints({ password }: { password: string }) {
+  if (!password) return null;
+  return (
+    <ul className="mt-1 space-y-0.5">
+      {PASSWORD_RULES.map((rule) => {
+        const ok = rule.test(password);
+        return (
+          <li
+            key={rule.id}
+            className={`flex items-center gap-1 text-xs ${ok ? "text-green-600 dark:text-green-500" : "text-muted-foreground"}`}
+          >
+            <span aria-hidden>{ok ? "✓" : "○"}</span>
+            {rule.label}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function validatePassword(value: string): string | null {
   if (!value) return null;
-  return value.length >= 8 ? null : "Password must be at least 8 characters.";
+  const failing = PASSWORD_RULES.filter((r) => !r.test(value));
+  return failing.length === 0 ? null : "Password does not meet all requirements.";
 }
 
 function validateConfirm(password: string, confirm: string): string | null {
@@ -133,6 +169,7 @@ export default function RegisterPage() {
                 onBlur={() => setPasswordError(validatePassword(password))}
                 aria-invalid={passwordError != null}
               />
+              <PasswordStrengthHints password={password} />
               {passwordError && (
                 <p className="text-xs text-destructive">{passwordError}</p>
               )}
