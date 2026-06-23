@@ -50,7 +50,7 @@ log = logging.getLogger("benchmark")
 
 _TERMINAL = {"passed", "failed", "rejected", "awaiting_approval"}
 _POLL_INTERVAL_S = 15
-_INGEST_TIMEOUT_S = 300  # max wait for repo to reach ready status
+_INGEST_TIMEOUT_S = 600  # max wait for repo to reach ready status
 _RUN_TIMEOUT_S = 900  # max wait for a single run (15 min)
 
 

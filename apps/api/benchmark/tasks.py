@@ -80,7 +80,7 @@ TASKS: list[BenchmarkTask] = [
     BenchmarkTask(
         task_id="humanize-metric",
         repo_name="humanize",
-        clone_url="https://github.com/jazzband/humanize.git",
+        clone_url="https://github.com/python-humanize/humanize.git",
         default_branch="main",
         issue_text=(
             "Add a `metric(value: float, unit: str = '') -> str` function to "
@@ -97,7 +97,7 @@ TASKS: list[BenchmarkTask] = [
     BenchmarkTask(
         task_id="humanize-clamp",
         repo_name="humanize",
-        clone_url="https://github.com/jazzband/humanize.git",
+        clone_url="https://github.com/python-humanize/humanize.git",
         default_branch="main",
         issue_text=(
             "Add a `clamp(value: float, min_value: float = 0, "
@@ -151,7 +151,7 @@ TASKS: list[BenchmarkTask] = [
     BenchmarkTask(
         task_id="natsort-keygen-reversed",
         repo_name="natsort",
-        clone_url="https://github.com/SethMMorris/natsort.git",
+        clone_url="https://github.com/SethMMorton/natsort.git",
         default_branch="master",
         issue_text=(
             "Add a `natsort_keygen_reversed(alg=ns.DEFAULT)` convenience function to "
