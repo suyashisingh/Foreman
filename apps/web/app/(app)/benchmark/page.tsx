@@ -65,7 +65,7 @@ const DIFFICULTY_ORDER: Record<Difficulty, number> = { easy: 0, medium: 1, hard:
 // Stat card with monospace label
 // ---------------------------------------------------------------------------
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <Card>
       <CardHeader className="pb-1">
@@ -75,6 +75,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
       </CardHeader>
       <CardContent>
         <p className="font-heading text-3xl font-bold">{value}</p>
+        {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
       </CardContent>
     </Card>
   );
@@ -164,6 +165,10 @@ function SortHeader({
 // Task row — monospace task_id, color-coded difficulty
 // ---------------------------------------------------------------------------
 
+function isSkipped(t: TaskResultOut): boolean {
+  return !t.passed && t.attempts_to_pass == null && (t.token_cost_usd === 0 || t.token_cost_usd === null);
+}
+
 function TaskRow({ t }: { t: TaskResultOut & { difficulty: Difficulty } }) {
   return (
     <tr className="border-b last:border-0 hover:bg-muted/30">
@@ -174,7 +179,7 @@ function TaskRow({ t }: { t: TaskResultOut & { difficulty: Difficulty } }) {
         </span>
       </td>
       <td className="px-4 py-2 text-center">
-        <StatusBadge status={t.passed ? "passed" : "failed"} />
+        <StatusBadge status={isSkipped(t) ? "skipped" : t.passed ? "passed" : "failed"} />
       </td>
       <td className="px-4 py-2 text-center text-sm">
         {t.pass_at_1 ? (
@@ -238,6 +243,16 @@ export default function BenchmarkPage() {
     if (!data) return [];
     return data.tasks.map((t) => ({ ...t, difficulty: difficultyFor(t.task_id) }));
   }, [data]);
+
+  const { infraCount, agentRanCount, agentPassedCount, allRanPassedAt1 } = useMemo(() => {
+    const ran = enrichedTasks.filter((t) => !isSkipped(t));
+    return {
+      infraCount: enrichedTasks.length - ran.length,
+      agentRanCount: ran.length,
+      agentPassedCount: enrichedTasks.filter((t) => t.passed).length,
+      allRanPassedAt1: ran.length > 0 && ran.every((t) => t.pass_at_1),
+    };
+  }, [enrichedTasks]);
 
   const sortedTasks = useMemo(() => {
     const copy = [...enrichedTasks];
@@ -339,6 +354,14 @@ export default function BenchmarkPage() {
           are not from demo runs — they reflect the agent pipeline&apos;s actual
           pass rate on independently verified tasks.
         </p>
+        {data.task_count > 0 && (
+          <p className="text-sm text-muted-foreground mt-2 max-w-2xl">
+            {agentRanCount} of {enrichedTasks.length} task{enrichedTasks.length !== 1 ? "s" : ""} ran — {agentPassedCount} passed.
+            {infraCount > 0 && (
+              <>{" "}{infraCount} task{infraCount !== 1 ? "s" : ""} did not reach the agent due to repo ingestion failures.</>
+            )}
+          </p>
+        )}
       </div>
 
       {/* Inline CLI notice — only shown when user has no runs yet */}
@@ -359,7 +382,11 @@ export default function BenchmarkPage() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="pass@1" value={pct(data.pass_at_1_rate)} />
+        <StatCard
+          label="pass@1"
+          value={pct(data.pass_at_1_rate)}
+          sub={infraCount > 0 ? `${agentPassedCount}/${agentRanCount} tasks attempted` : undefined}
+        />
         <StatCard label="pass@3" value={pct(data.pass_at_3_rate)} />
         <StatCard
           label="avg time-to-green"
@@ -370,6 +397,26 @@ export default function BenchmarkPage() {
           value={`$${data.total_token_cost_usd.toFixed(3)}`}
         />
       </div>
+
+      {/* Infrastructure failure notice */}
+      {infraCount > 0 && (
+        <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground space-y-1">
+          <p>
+            <span className="font-medium text-foreground">
+              {infraCount} task{infraCount !== 1 ? "s" : ""}
+            </span>{" "}
+            were skipped due to repo embedding failures (Voyage AI free-tier rate limit). These are not counted in the agent pass rate.
+          </p>
+          {agentRanCount > 0 && (
+            <p>
+              The {agentRanCount} task{agentRanCount !== 1 ? "s" : ""} that ran{" "}
+              {allRanPassedAt1
+                ? "all passed on the first attempt."
+                : `saw ${agentPassedCount} pass.`}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Table controls */}
       <div>

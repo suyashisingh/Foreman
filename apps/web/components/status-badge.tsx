@@ -87,6 +87,10 @@ const STATUS_CONFIG: Record<string, StatusCfg> = {
     className:
       "bg-secondary text-secondary-foreground border border-border",
   },
+  skipped: {
+    label: "Skipped",
+    className: "bg-secondary text-muted-foreground",
+  },
 };
 
 export function StatusBadge({
