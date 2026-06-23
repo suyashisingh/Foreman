@@ -66,6 +66,7 @@ function RepoCard({
 
   async function handleDelete() {
     if (!onDelete || pendingAction) return;
+    if (!window.confirm("Delete this repo? This cannot be undone.")) return;
     setPendingAction("delete");
     try { await onDelete(repo); } finally { setPendingAction(null); }
   }
@@ -146,6 +147,15 @@ function RepoCard({
             >
               View runs →
             </Link>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive hover:text-destructive"
+              onClick={handleDelete}
+              disabled={pendingAction !== null}
+            >
+              {pendingAction === "delete" ? "Deleting…" : "Delete"}
+            </Button>
           </div>
         )}
       </CardContent>
@@ -389,6 +399,7 @@ function EmptyRepos() {
 export default function DashboardPage() {
   const { token, user } = useAuth();
   const router = useRouter();
+  const { addToast } = useToast();
 
   const [repos, setRepos] = useState<RepoDetail[]>([]);
   const [loading, setLoading] = useState(true);
@@ -445,8 +456,14 @@ export default function DashboardPage() {
   }
 
   async function handleDelete(repo: RepoDetail) {
-    await api.deleteRepo(token!, repo.id);
     setRepos((prev) => prev.filter((r) => r.id !== repo.id));
+    try {
+      await api.deleteRepo(token!, repo.id);
+    } catch (err) {
+      setRepos((prev) => [repo, ...prev]);
+      const msg = err instanceof ApiError ? err.detail : "Failed to delete repository.";
+      addToast(msg, "error");
+    }
   }
 
   return (
