@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     # No default: the app must not start without a configured sandbox key.
     E2B_API_KEY: str
 
+    # --- CORS ---
+    # Comma-separated list of allowed frontend origins.
+    # Override in production: CORS_ORIGINS=https://your-app.example.com
+    CORS_ORIGINS: str = "http://localhost:3000"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

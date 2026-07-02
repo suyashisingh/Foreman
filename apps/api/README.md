@@ -50,30 +50,25 @@ uv sync                       # installs all deps including dev extras into .ven
 
 ## 3. Configure environment
 
-Create `apps/api/.env` (or export variables in your shell):
+Copy the template and fill in your secrets:
 
-```dotenv
-DATABASE_URL=postgresql+asyncpg://foreman:foreman_secret@localhost:5434/foreman
-REDIS_URL=redis://localhost:6380
-ENVIRONMENT=development
-LOG_LEVEL=INFO
-JWT_SECRET_KEY=<generate with: python -c "import secrets; print(secrets.token_hex(32))">
-VOYAGE_API_KEY=<your Voyage AI key from dash.voyageai.com>
-VOYAGE_MODEL=voyage-code-3
-REPO_CLONE_DIR=/tmp/foreman-repos
-
-# Agent / LLM
-GEMINI_API_KEY=<your Google AI Studio key from aistudio.google.com>
-GEMINI_MODEL=gemini-3.1-flash-lite
-LLM_PROVIDER=gemini
-MAX_CODER_RETRIES=2
-MAX_CODER_TOOL_ITERATIONS=15
-# e2b sandbox — get a key at https://e2b.dev
-E2B_API_KEY=<your e2b key>
+```bash
+cd apps/api
+cp .env.example .env
 ```
 
-`JWT_SECRET_KEY`, `VOYAGE_API_KEY`, and `GEMINI_API_KEY` have **no defaults** — the
-API will refuse to start if any is missing.
+Then edit `apps/api/.env`:
+
+| Variable | Where to get it |
+|---|---|
+| `DATABASE_URL` | Use `POSTGRES_PASSWORD` from `infra/.env.example`; host/port match the docker-compose setup |
+| `JWT_SECRET_KEY` | Generate: `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `VOYAGE_API_KEY` | [dash.voyageai.com](https://dash.voyageai.com) |
+| `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com) |
+| `E2B_API_KEY` | [e2b.dev](https://e2b.dev) |
+
+`DATABASE_URL`, `JWT_SECRET_KEY`, `VOYAGE_API_KEY`, `GEMINI_API_KEY`, and `E2B_API_KEY`
+have **no defaults** — the API will refuse to start if any is missing.
 
 ---
 

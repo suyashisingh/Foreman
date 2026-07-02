@@ -23,8 +23,16 @@ from app.db.models import (
 )
 
 RUNS_URL = "/api/v1/runs"
-_AUTH_USER = {"email": "runstest@example.com", "password": "Passw0rd!", "name": "Runs"}
-_AUTH_USER2 = {"email": "other@example.com", "password": "Passw0rd!", "name": "Other"}
+_AUTH_USER = {
+    "email": "runstest@example.com",
+    "password": "testpassword123",
+    "name": "Runs",
+}
+_AUTH_USER2 = {
+    "email": "other@example.com",
+    "password": "testpassword123",
+    "name": "Other",
+}
 
 
 # ---------------------------------------------------------------------------

@@ -17,7 +17,7 @@ ME_URL = "/api/v1/auth/me"
 
 VALID_USER = {
     "email": "alice@example.com",
-    "password": "supersecret123",
+    "password": "testpassword123",
     "name": "Alice",
 }
 

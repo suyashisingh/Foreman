@@ -12,7 +12,11 @@ from app.db.models import Repo, RepoStatus, User
 
 SYSTEM_URL = "/api/v1/system/status"
 REPOS_URL = "/api/v1/repos"
-_AUTH_USER = {"email": "systest@example.com", "password": "Passw0rd!", "name": "Sys"}
+_AUTH_USER = {
+    "email": "systest@example.com",
+    "password": "testpassword123",
+    "name": "Sys",
+}
 
 
 # ---------------------------------------------------------------------------
