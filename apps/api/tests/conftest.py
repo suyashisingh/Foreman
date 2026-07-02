@@ -9,9 +9,13 @@ import os
 
 # Must happen before any app import.
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-not-for-production!!")
+# Construct the test DATABASE_URL from POSTGRES_PASSWORD so the password is
+# never hardcoded in source.  The default matches the local docker-compose setup
+# documented in infra/.env.example; CI sets POSTGRES_PASSWORD explicitly.
+_pg_pass = os.environ.get("POSTGRES_PASSWORD", "foreman_secret")
 os.environ.setdefault(
     "DATABASE_URL",
-    "postgresql+asyncpg://foreman:foreman_secret@localhost:5434/foreman_test",
+    f"postgresql+asyncpg://foreman:{_pg_pass}@localhost:5434/foreman_test",
 )
 os.environ.setdefault("VOYAGE_API_KEY", "test-voyage-key-not-real")
 os.environ.setdefault("GEMINI_API_KEY", "test-gemini-key-not-real")

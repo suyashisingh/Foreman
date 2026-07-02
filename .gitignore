@@ -2,9 +2,17 @@
 # All .env files at any depth; .env.example / .env.*.example are committed
 .env
 **/.env
+.env.local
+**/.env.local
+.env.production
+**/.env.production
+.env.*.local
+**/.env.*.local
 !**/.env.example
 !**/.env.*.example
 !**/.env.local.example
+*.pem
+*.key
 
 # ── Python ───────────────────────────────────────────────────────────────────
 __pycache__/

@@ -22,7 +22,7 @@ jobs:
         image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: foreman
-          POSTGRES_PASSWORD: foreman_secret
+          POSTGRES_PASSWORD: ci-postgres-test-password
           POSTGRES_DB: foreman_test
         ports:
           - 5432:5432
@@ -46,7 +46,8 @@ jobs:
     # Both alembic and pytest read these from the environment.
     # JWT_SECRET_KEY, VOYAGE_API_KEY, and GEMINI_API_KEY have no defaults — values must be present.
     env:
-      DATABASE_URL: postgresql+asyncpg://foreman:foreman_secret@localhost:5432/foreman_test
+      DATABASE_URL: postgresql+asyncpg://foreman:ci-postgres-test-password@localhost:5432/foreman_test
+      POSTGRES_PASSWORD: ci-postgres-test-password
       REDIS_URL: redis://localhost:6379
       JWT_SECRET_KEY: ci-only-dummy-secret-key-not-used-in-production-0000
       VOYAGE_API_KEY: ci-only-dummy-voyage-key-not-used-in-production-0000

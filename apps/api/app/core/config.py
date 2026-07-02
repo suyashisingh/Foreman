@@ -13,9 +13,9 @@ class Settings(BaseSettings):
     """
 
     # --- Database / cache ---
-    DATABASE_URL: str = (
-        "postgresql+asyncpg://foreman:foreman_secret@localhost:5434/foreman"
-    )
+    # No default: must be set via DATABASE_URL env var or .env file.
+    # See apps/api/.env.example for the expected format.
+    DATABASE_URL: str
     REDIS_URL: str = "redis://localhost:6380"
 
     # --- Runtime ---

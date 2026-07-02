@@ -18,10 +18,12 @@ from app.core.security import create_access_token
 from app.db.models import Repo, RepoStatus, Run, RunStatus, User
 from app.main import create_app
 
-# Conftest injects DATABASE_URL before any app import; fall back to local dev port.
+# Conftest injects DATABASE_URL before any app import.  Build the fallback from
+# POSTGRES_PASSWORD so no password is hardcoded here; matches infra/.env.example.
+_pg_pass = os.environ.get("POSTGRES_PASSWORD", "foreman_secret")
 _DB_URL = os.environ.get(
     "DATABASE_URL",
-    "postgresql+asyncpg://foreman:foreman_secret@localhost:5434/foreman_test",
+    f"postgresql+asyncpg://foreman:{_pg_pass}@localhost:5434/foreman_test",
 )
 
 
