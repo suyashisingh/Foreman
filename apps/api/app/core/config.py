@@ -1,5 +1,7 @@
 """Application configuration loaded from environment variables or a .env file."""
 
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -21,12 +23,23 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def _normalise_db_url(cls, v: str) -> str:
-        """Accept plain postgres:// and postgresql:// URLs (e.g. from Neon)."""
+        """Accept plain postgres:// and postgresql:// URLs (e.g. from Neon).
+
+        Also strips `sslmode`, which asyncpg rejects as a connect() keyword
+        argument — SSL is instead configured via connect_args in session.py
+        and alembic/env.py.
+        """
         if v.startswith("postgres://"):
-            return v.replace("postgres://", "postgresql+asyncpg://", 1)
-        if v.startswith("postgresql://"):
-            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return v
+            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif v.startswith("postgresql://"):
+            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+        scheme, netloc, path, query, fragment = urlsplit(v)
+        if query:
+            query = urlencode(
+                [(k, val) for k, val in parse_qsl(query) if k != "sslmode"]
+            )
+        return urlunsplit((scheme, netloc, path, query, fragment))
 
     REDIS_URL: str = "redis://localhost:6380"
 

@@ -6,6 +6,7 @@ live schema.
 """
 
 import asyncio
+import ssl
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -68,10 +69,18 @@ def do_run_migrations(connection: Connection) -> None:
 
 async def run_async_migrations() -> None:
     """Create an async engine and run migrations inside a synchronous callback."""
+    # Same asyncpg/sslmode issue as session.py: config.py already strips
+    # `sslmode` from the URL, so TLS to Neon has to be supplied here via
+    # connect_args instead.
+    connect_args = {}
+    if "neon.tech" in settings.DATABASE_URL:
+        connect_args["ssl"] = ssl.create_default_context()
+
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

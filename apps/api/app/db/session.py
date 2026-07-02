@@ -6,6 +6,8 @@ engine lifecycle (create on startup, dispose on shutdown) and exposes an
 check.
 """
 
+import ssl
+
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -28,10 +30,18 @@ def init_engine() -> None:
     """
     global engine, async_session_factory
 
+    # Neon requires TLS but asyncpg doesn't accept `sslmode` as a query
+    # param (config.py already strips it) — pass an SSL context via
+    # connect_args instead. Not needed for local (non-TLS) Postgres.
+    connect_args = {}
+    if "neon.tech" in settings.DATABASE_URL:
+        connect_args["ssl"] = ssl.create_default_context()
+
     engine = create_async_engine(
         settings.DATABASE_URL,
         echo=settings.ENVIRONMENT == "development",
         pool_pre_ping=True,
+        connect_args=connect_args,
     )
     async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
