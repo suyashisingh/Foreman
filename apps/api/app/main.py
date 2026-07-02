@@ -50,6 +50,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             redis_settings=WorkerSettings.redis_settings,
             max_jobs=WorkerSettings.max_jobs,
             job_timeout=WorkerSettings.job_timeout,
+            on_startup=WorkerSettings.on_startup,
+            on_shutdown=WorkerSettings.on_shutdown,
+            # We manage the worker's lifecycle ourselves via the FastAPI
+            # lifespan (cancel + manual cleanup below). Left at its True
+            # default, arq registers its own SIGINT/SIGTERM handlers on
+            # this loop, which both hijacks uvicorn's own shutdown signal
+            # handling and crashes outright when the loop isn't running on
+            # the main thread (e.g. FastAPI's TestClient, which runs the
+            # app in a background thread).
+            handle_signals=False,
         )
         app.state.worker = worker
         await worker.async_run()
@@ -65,10 +75,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await app.state.worker_task
         except asyncio.CancelledError:
             pass
-        # async_run() doesn't close the worker's own Redis pool or run
-        # on_shutdown (which disposes the DB engine) — close() does both.
+        # Replicates arq's Worker.close(), minus its `handle_sig(SIGUSR1)`
+        # call — SIGUSR1 doesn't exist on Windows, and we've already
+        # cancelled the worker above, so that call would be redundant here
+        # even on POSIX. async_run() itself doesn't close the worker's own
+        # Redis pool or run on_shutdown (which disposes the DB engine), so
+        # both are done explicitly.
         if hasattr(app.state, "worker"):
-            await app.state.worker.close()
+            worker = app.state.worker
+            for job_task in worker.tasks.values():
+                if not job_task.done():
+                    job_task.cancel()
+            if worker.pool is not None:
+                await worker.pool.delete(worker.health_check_key)
+                if worker.on_shutdown:
+                    await worker.on_shutdown(worker.ctx)
+                await worker.pool.close(close_connection_pool=True)
     await app.state.arq_pool.aclose()
     await app.state.redis.aclose()
     await close_engine()
