@@ -49,8 +49,12 @@ class WorkerSettings:
 
     functions = [ingest_repo, execute_run]
 
-    on_startup = on_startup
-    on_shutdown = on_shutdown
+    # staticmethod so pyright doesn't treat `ctx` as an implicit `self` when
+    # these are accessed unbound via the class (both arq's own CLI and
+    # app/main.py's in-process worker do `WorkerSettings.on_startup`, never
+    # through an instance).
+    on_startup = staticmethod(on_startup)
+    on_shutdown = staticmethod(on_shutdown)
 
     # Allow up to 4 concurrent ingestion jobs.  Each job is mostly I/O-bound
     # (git clone + Voyage API), so concurrency is cheap.
