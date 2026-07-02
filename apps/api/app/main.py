@@ -1,11 +1,12 @@
 """FastAPI application factory and lifespan management."""
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 import redis.asyncio as aioredis
-from arq import create_pool
+from arq import Worker, create_pool
 from arq.connections import RedisSettings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +15,7 @@ from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.session import close_engine, init_engine
 from app.routers import auth, benchmark, health, repos, runs, system, ws
+from app.workers.settings import WorkerSettings
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +40,35 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # protocol framing and should not share the general-purpose client.
     app.state.arq_pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
 
+    # Render's free tier only allows one web service, so the ARQ worker runs
+    # as a background task inside the API process instead of a separate
+    # Render worker service. Harmless to also run this locally alongside a
+    # standalone `uv run arq ...` worker — ARQ workers coordinate over Redis.
+    async def run_worker() -> None:
+        worker = Worker(
+            functions=WorkerSettings.functions,
+            redis_settings=WorkerSettings.redis_settings,
+            max_jobs=WorkerSettings.max_jobs,
+            job_timeout=WorkerSettings.job_timeout,
+        )
+        app.state.worker = worker
+        await worker.async_run()
+
+    app.state.worker_task = asyncio.create_task(run_worker())
+
     yield
 
     logger.info("Shutting down Foreman API")
+    if hasattr(app.state, "worker_task"):
+        app.state.worker_task.cancel()
+        try:
+            await app.state.worker_task
+        except asyncio.CancelledError:
+            pass
+        # async_run() doesn't close the worker's own Redis pool or run
+        # on_shutdown (which disposes the DB engine) — close() does both.
+        if hasattr(app.state, "worker"):
+            await app.state.worker.close()
     await app.state.arq_pool.aclose()
     await app.state.redis.aclose()
     await close_engine()
