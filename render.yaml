@@ -1,0 +1,46 @@
+services:
+  - type: web
+    name: foreman-api
+    runtime: python
+    rootDir: apps/api
+    buildCommand: pip install uv && uv sync
+    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: E2B_API_KEY
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.12.0
+
+  - type: worker
+    name: foreman-worker
+    runtime: python
+    rootDir: apps/api
+    buildCommand: pip install uv && uv sync
+    startCommand: uv run arq app.workers.settings.WorkerSettings
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: E2B_API_KEY
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.12.0

@@ -1,5 +1,6 @@
 """Application configuration loaded from environment variables or a .env file."""
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +17,17 @@ class Settings(BaseSettings):
     # No default: must be set via DATABASE_URL env var or .env file.
     # See apps/api/.env.example for the expected format.
     DATABASE_URL: str
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def _normalise_db_url(cls, v: str) -> str:
+        """Accept plain postgres:// and postgresql:// URLs (e.g. from Neon)."""
+        if v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        if v.startswith("postgresql://"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
+
     REDIS_URL: str = "redis://localhost:6380"
 
     # --- Runtime ---
@@ -68,8 +80,8 @@ class Settings(BaseSettings):
 
     # --- CORS ---
     # Comma-separated list of allowed frontend origins.
-    # Override in production: CORS_ORIGINS=https://your-app.example.com
-    CORS_ORIGINS: str = "http://localhost:3000"
+    # Override in production: ALLOWED_ORIGINS=https://your-vercel-app.vercel.app
+    ALLOWED_ORIGINS: str = "http://localhost:3000"
 
     model_config = SettingsConfigDict(
         env_file=".env",

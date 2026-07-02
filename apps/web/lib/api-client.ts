@@ -1,12 +1,12 @@
 /**
  * Typed fetch wrapper for the Foreman FastAPI backend.
  *
- * Base URL is read from NEXT_PUBLIC_API_BASE_URL so the same bundle works in
+ * Base URL is read from NEXT_PUBLIC_API_URL so the same bundle works in
  * local dev (http://localhost:8000) and deployed environments.
  */
 
 const BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 // ---------------------------------------------------------------------------
 // Types — mirror the backend Pydantic schemas
