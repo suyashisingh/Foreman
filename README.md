@@ -1,50 +1,34 @@
 # Foreman
 
-Autonomous multi-agent software engineering platform.
+Autonomous multi-agent software engineering platform. Give it a GitHub
+issue — four specialized AI agents plan, write, test, and review code
+in an isolated cloud environment. You approve the diff before anything
+merges.
 
-**Stack:** Next.js 15 · FastAPI · PostgreSQL + pgvector · Redis + ARQ · LangGraph · e2b sandboxes
+**Live demo:** https://foreman-gcokyb54y-suyashi.vercel.app  
+**Source:** https://github.com/suyashisingh/Foreman
 
-## Monorepo layout
+---
 
-```
-apps/web/       Next.js frontend (scaffolded in a later task)
-apps/api/       FastAPI backend
-infra/          Docker Compose + Dockerfiles for local dev
-benchmark/      Evaluation harness (scaffolded in a later task)
-.github/        CI workflows (added in a later task)
-```
+## What it does
 
-## Quick start
+Foreman takes a natural-language task description and a registered
+GitHub repository, then runs a four-agent pipeline entirely in the
+cloud:
 
-See `apps/api/README.md` for API setup and `infra/` for Docker Compose details.
+1. **Planner** — searches the codebase via pgvector RAG, produces a
+   step-by-step implementation plan
+2. **Coder** — implements the plan with file-editing tool calls inside
+   an isolated e2b sandbox. Never touches your machine.
+3. **Tester** — runs pytest inside the same sandbox. On failure, sends
+   the full output back to Coder for targeted fixes — up to 3 retry
+   loops.
+4. **Reviewer** — reads the final diff, rates risk (low/medium/high),
+   writes a PR title and description, and halts the pipeline for your
+   approval.
 
-## Running the full benchmark
+Nothing merges without an explicit approve click.
 
-The benchmark suite covers 8 curated tasks across three small Python repos.
-Register all three repos on the Dashboard before running the CLI — the runner
-will reuse any repos already in ready state.
+---
 
-**Required repos:**
-
-| Repo | URL |
-|------|-----|
-| iniconfig | `https://github.com/pytest-dev/iniconfig.git` |
-| humanize | `https://github.com/jmoiron/humanize.git` |
-| natsort | `https://github.com/SethMMorton/natsort.git` |
-
-**Run the CLI** (after all three repos show "Ready" status):
-
-```bash
-cd apps/api
-uv run python -m benchmark.runner \
-  --email your@email.com \
-  --password yourpassword
-```
-
-Results are scoped per user — navigate to `/benchmark` in the app to see your
-results. The public landing page shows a global aggregate across all users.
-
-> **Note:** If you had benchmark runs before the per-user migration (commit
-> `8c04453`), they were assigned to the first user created in the database,
-> not to your account. Re-run the benchmark CLI with your own credentials to
-> populate your results.
+## Architecture
